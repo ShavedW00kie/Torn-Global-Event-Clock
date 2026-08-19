@@ -5,6 +5,8 @@
 // @description  Draggable global event countdown clock for Torn.com (Desktop & TornPDA)
 // @author       ShavedW00kie
 // @homepageURL  https://github.com/ShavedW00kie
+// @downloadURL  https://github.com/ShavedW00kie/Torn-Global-Event-Clock/raw/refs/heads/main/TornGlobalEventClock.user.js
+// @updateURL    https://github.com/ShavedW00kie/Torn-Global-Event-Clock/raw/refs/heads/main/TornGlobalEventClock.user.js
 // @match        https://*.torn.com/*
 // @match        https://torn.com/*
 // @grant        GM_setValue
