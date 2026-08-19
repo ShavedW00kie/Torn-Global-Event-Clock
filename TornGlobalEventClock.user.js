@@ -3,7 +3,7 @@
 // @namespace    https://github.com/ShavedW00kie/
 // @version      1.0.0
 // @description  Draggable global event countdown clock for Torn.com (Desktop & TornPDA)
-// @author       Torn Scripting
+// @author       ShavedW00kie (via Copilot Space)
 // @match        https://*.torn.com/*
 // @match        https://torn.com/*
 // @grant        GM_setValue
