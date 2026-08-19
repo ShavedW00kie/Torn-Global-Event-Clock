@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Global Event Clock
 // @namespace    https://github.com/ShavedW00kie/
-// @version      1.2.2
+// @version      1.2.3
 // @description  Draggable global event countdown clock for Torn.com (Desktop & TornPDA) with granular toggles
 // @author       ShavedW00kie (Torn: ThaWookie [2954173] )
 // @homepageURL  https://github.com/ShavedW00kie
@@ -281,7 +281,7 @@
         });
 
         clockEl.innerHTML = `
-            <div id="torn-clock-header">drag | Torn Clock</div>
+            <div id="torn-clock-header">-drag- | Torn Countdown Clock</div>
             <div id="torn-clock-data">Loading...</div>
             <a class="torn-clock-toggle" id="torn-clock-settings-btn">Settings</a>
             <div class="torn-clock-settings-panel" id="torn-clock-settings">
