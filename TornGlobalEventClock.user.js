@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         Torn Global Event Clock
 // @namespace    https://github.com/ShavedW00kie/
-// @version      1.2.0
-// @description  Draggable global event countdown clock for Torn.com (Desktop & TornPDA)
-// @author       ShavedW00kie
+// @version      1.2.1
+// @description  Draggable global event countdown clock for Torn.com (Desktop & TornPDA) with granular toggles
+// @author       ShavedW00kie (Torn: ThaWookie [2954173] )
 // @homepageURL  https://github.com/ShavedW00kie
 // @downloadURL  https://github.com/ShavedW00kie/Torn-Global-Event-Clock/raw/refs/heads/main/TornGlobalEventClock.user.js
 // @updateURL    https://github.com/ShavedW00kie/Torn-Global-Event-Clock/raw/refs/heads/main/TornGlobalEventClock.user.js
@@ -47,29 +47,60 @@
     const State = {
         pos: Storage.get("pos", { top: 50, left: 50 }),
         useLocalTime: Storage.get("useLocalTime", false),
-        localOffset: Storage.get("localOffset", 0), // e.g., -7 for GMT-7
-        events: Storage.get("events", {
-            hourly: true,
-            daily: true,
-            weekly: true,
-            monthly: true,
-            regenEnergy: true,
-            regenNerve: true,
-            regenHappy: true
-        })
+        localOffset: Storage.get("localOffset", 0),
+        
+        // Category Toggles
+        cat_hourly: Storage.get("cat_hourly", true),
+        cat_daily: Storage.get("cat_daily", true),
+        cat_weekly: Storage.get("cat_weekly", true),
+        cat_monthly: Storage.get("cat_monthly", true),
+        cat_regen: Storage.get("cat_regen", true),
+
+        // Individual Event Toggles
+        ev_hourly_vendors: Storage.get("ev_hourly_vendors", true),
+        ev_daily_reset: Storage.get("ev_daily_reset", true),
+        ev_daily_virus: Storage.get("ev_daily_virus", false),
+        ev_daily_prop: Storage.get("ev_daily_prop", false),
+        ev_daily_addiction: Storage.get("ev_daily_addiction", false),
+        ev_daily_company: Storage.get("ev_daily_company", false),
+        ev_weekly_lotto: Storage.get("ev_weekly_lotto", false),
+        ev_weekly_news: Storage.get("ev_weekly_news", false),
+        ev_weekly_company: Storage.get("ev_weekly_company", false),
+        ev_monthly_sub: Storage.get("ev_monthly_sub", false),
+        ev_regen_energy: Storage.get("ev_regen_energy", true),
+        ev_regen_nerve: Storage.get("ev_regen_nerve", true),
+        ev_regen_happy: Storage.get("ev_regen_happy", true) // The 15m reset for happy jumps
     };
 
     const saveState = () => {
         Storage.set("pos", State.pos);
         Storage.set("useLocalTime", State.useLocalTime);
         Storage.set("localOffset", State.localOffset);
-        Storage.set("events", State.events);
+        
+        Storage.set("cat_hourly", State.cat_hourly);
+        Storage.set("cat_daily", State.cat_daily);
+        Storage.set("cat_weekly", State.cat_weekly);
+        Storage.set("cat_monthly", State.cat_monthly);
+        Storage.set("cat_regen", State.cat_regen);
+
+        Storage.set("ev_hourly_vendors", State.ev_hourly_vendors);
+        Storage.set("ev_daily_reset", State.ev_daily_reset);
+        Storage.set("ev_daily_virus", State.ev_daily_virus);
+        Storage.set("ev_daily_prop", State.ev_daily_prop);
+        Storage.set("ev_daily_addiction", State.ev_daily_addiction);
+        Storage.set("ev_daily_company", State.ev_daily_company);
+        Storage.set("ev_weekly_lotto", State.ev_weekly_lotto);
+        Storage.set("ev_weekly_news", State.ev_weekly_news);
+        Storage.set("ev_weekly_company", State.ev_weekly_company);
+        Storage.set("ev_monthly_sub", State.ev_monthly_sub);
+        Storage.set("ev_regen_energy", State.ev_regen_energy);
+        Storage.set("ev_regen_nerve", State.ev_regen_nerve);
+        Storage.set("ev_regen_happy", State.ev_regen_happy);
     };
 
     // ==========================================
     // 2. TIME & EVENT PARSER LOGIC
     // ==========================================
-    // TCT is strictly UTC.
     const getTCTDate = () => new Date();
 
     const getNextOccurrence = (hour, minute, dayOfWeek = null, dayOfMonth = null) => {
@@ -93,53 +124,44 @@
     const getNextInterval = (intervalMinutes) => {
         const now = getTCTDate();
         const minutes = now.getUTCMinutes();
-        const nextTargetMin = Math.ceil((minutes + 1) / intervalMinutes) * intervalMinutes;
+        const nextTargetMin = Math.floor((minutes + intervalMinutes) / intervalMinutes) * intervalMinutes;
         let target = new Date(now.getTime());
         target.setUTCHours(now.getUTCHours(), nextTargetMin, 0, 0);
         return target;
     };
 
-    const EventDictionary = [
-        // Hourly (XX:00, 15, 30, 45)
-        { id: "hourly", name: "Vendors / Territory", getNext: () => getNextInterval(15) },
-        
-        // Daily
-        { id: "daily", name: "Daily Reset (Casino/City)", getNext: () => getNextOccurrence(0, 0) },
-        { id: "daily", name: "Virus Coding", getNext: () => getNextOccurrence(3, 25) },
-        { id: "daily", name: "Property/Stats Reset", getNext: () => getNextOccurrence(3, 30) },
-        { id: "daily", name: "Natural Addiction Decay", getNext: () => getNextOccurrence(3, 31) },
-        { id: "daily", name: "Company Effectiveness", getNext: () => getNextOccurrence(18, 0) },
-        
-        // Weekly (Sunday = 0)
-        { id: "weekly", name: "Lotteries", getNext: () => getNextOccurrence(10, 0, 0) },
-        { id: "weekly", name: "Newspaper Bazaar", getNext: () => getNextOccurrence(14, 0, 0) },
-        { id: "weekly", name: "Company Star Rating", getNext: () => getNextOccurrence(18, 0, 0) },
-        
-        // Monthly
-        { id: "monthly", name: "Subscriber Bonuses", getNext: () => getNextOccurrence(5, 15, null, 1) },
-
-        // Regeneration
-        { id: "regenEnergy", name: "Energy (+5)", getNext: () => getNextInterval(10) },
-        { id: "regenNerve", name: "Nerve (+1)", getNext: () => getNextInterval(5) },
-        { id: "regenHappy", name: "Happiness Soft-cap", getNext: () => getNextInterval(15) }
+    const Categories = [
+        { id: "hourly", name: "Hourly Events" },
+        { id: "daily", name: "Daily Events" },
+        { id: "weekly", name: "Weekly Events" },
+        { id: "monthly", name: "Monthly Events" },
+        { id: "regen", name: "Regeneration" }
     ];
 
-    const getNextEvent = () => {
-        let closest = null;
-        let minDiff = Infinity;
-        const now = getTCTDate();
+    const EventDictionary = [
+        // Hourly (XX:00, 15, 30, 45)
+        { id: "ev_hourly_vendors", cat: "hourly", name: "Vendors / Territory", getNext: () => getNextInterval(15) },
+        
+        // Daily
+        { id: "ev_daily_reset", cat: "daily", name: "Daily Reset", getNext: () => getNextOccurrence(0, 0) },
+        { id: "ev_daily_virus", cat: "daily", name: "Virus Coding", getNext: () => getNextOccurrence(3, 25) },
+        { id: "ev_daily_prop", cat: "daily", name: "Property/Stats", getNext: () => getNextOccurrence(3, 30) },
+        { id: "ev_daily_addiction", cat: "daily", name: "Addiction Decay", getNext: () => getNextOccurrence(3, 31) },
+        { id: "ev_daily_company", cat: "daily", name: "Company Effectiveness", getNext: () => getNextOccurrence(18, 0) },
+        
+        // Weekly (Sunday = 0)
+        { id: "ev_weekly_lotto", cat: "weekly", name: "Lotteries", getNext: () => getNextOccurrence(10, 0, 0) },
+        { id: "ev_weekly_news", cat: "weekly", name: "Newspaper Bazaar", getNext: () => getNextOccurrence(14, 0, 0) },
+        { id: "ev_weekly_company", cat: "weekly", name: "Company Star", getNext: () => getNextOccurrence(18, 0, 0) },
+        
+        // Monthly
+        { id: "ev_monthly_sub", cat: "monthly", name: "Subscriber Bonuses", getNext: () => getNextOccurrence(5, 15, null, 1) },
 
-        EventDictionary.forEach(ev => {
-            if (!State.events[ev.id]) return;
-            const nextTime = ev.getNext();
-            const diff = nextTime - now;
-            if (diff > 0 && diff < minDiff) {
-                minDiff = diff;
-                closest = { name: ev.name, target: nextTime, diff };
-            }
-        });
-        return closest;
-    };
+        // Regeneration
+        { id: "ev_regen_energy", cat: "regen", name: "Energy (+5)", getNext: () => getNextInterval(10) },
+        { id: "ev_regen_nerve", cat: "regen", name: "Nerve (+1)", getNext: () => getNextInterval(5) },
+        { id: "ev_regen_happy", cat: "regen", name: "Happy Reset (15m)", getNext: () => getNextInterval(15) }
+    ];
 
     const formatTime = (ms) => {
         const totalSeconds = Math.floor(ms / 1000);
@@ -154,7 +176,6 @@
     // ==========================================
     let clockEl = null;
     let clockDataEl = null;
-    let menuEl = null;
 
     const injectCSS = () => {
         const css = `
@@ -167,9 +188,12 @@
                 border-radius: 6px;
                 padding: 10px;
                 font-family: Arial, sans-serif;
-                width: 200px;
+                width: 220px;
                 user-select: none;
                 box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+                max-height: 80vh;
+                display: flex;
+                flex-direction: column;
             }
             #torn-clock-header {
                 cursor: grab;
@@ -185,22 +209,33 @@
             #torn-clock-header:active { cursor: grabbing; }
             #torn-clock-data {
                 font-size: 14px;
-                text-align: center;
+                flex-grow: 1;
+                overflow-y: auto;
             }
-            .torn-clock-time { font-size: 24px; font-weight: bold; color: #4CAF50; margin: 5px 0; }
+            .torn-clock-main-time { font-size: 16px; font-weight: bold; text-align: center; margin-bottom: 10px; color: #fff; }
+            .torn-clock-cat-title { font-size: 12px; font-weight: bold; color: #888; margin: 8px 0 4px 0; text-transform: uppercase; text-align: center; }
+            .torn-clock-event-row { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 3px; }
+            .torn-clock-event-name { color: #ccc; }
+            .torn-clock-event-time { color: #4CAF50; font-family: monospace; font-size: 13px; font-weight: bold; }
+            .torn-clock-hr { border: 0; border-top: 1px solid #444; margin: 8px 0; }
+            
             .torn-clock-settings-panel {
                 display: none;
                 margin-top: 10px;
                 font-size: 11px;
                 border-top: 1px solid #555;
                 padding-top: 5px;
+                max-height: 200px;
+                overflow-y: auto;
             }
-            .torn-clock-settings-panel label {
-                display: block;
-                margin-bottom: 4px;
-                cursor: pointer;
-            }
-            .torn-clock-toggle { cursor: pointer; color: #888; font-size: 10px; text-decoration: underline; text-align: center; display: block; margin-top: 5px;}
+            .torn-clock-settings-panel label { display: block; margin-bottom: 4px; cursor: pointer; color: #ccc; }
+            .torn-clock-settings-cat { font-weight: bold; color: #fff; margin-top: 8px; border-bottom: 1px solid #444; padding-bottom: 2px; }
+            .torn-clock-settings-item { margin-left: 10px; }
+            .torn-clock-toggle { cursor: pointer; color: #888; font-size: 11px; text-decoration: underline; text-align: center; display: block; margin-top: 8px;}
+            
+            /* Scrollbar styling for panels */
+            #torn-clock-widget ::-webkit-scrollbar { width: 4px; }
+            #torn-clock-widget ::-webkit-scrollbar-thumb { background: #666; border-radius: 2px; }
         `;
         if (typeof GM_addStyle !== "undefined") {
             GM_addStyle(css);
@@ -219,21 +254,34 @@
         clockEl.style.top = `${State.pos.top}px`;
         clockEl.style.left = `${State.pos.left}px`;
 
+        // Generate dynamic settings HTML
+        let settingsHtml = `
+            <label><input type="checkbox" id="tc-toggle-tct" ${State.useLocalTime ? 'checked' : ''}> Use Local Time</label>
+            <label>Offset (hrs): <input type="number" id="tc-offset" value="${State.localOffset}" style="width:40px; background:#333; color:#fff; border:1px solid #555;"></label>
+        `;
+
+        Categories.forEach(cat => {
+            settingsHtml += `
+                <div class="torn-clock-settings-cat">
+                    <label><input type="checkbox" data-cat="${cat.id}" ${State[`cat_${cat.id}`] ? 'checked' : ''}> ${cat.name} (All)</label>
+                </div>
+            `;
+            const catEvents = EventDictionary.filter(e => e.cat === cat.id);
+            catEvents.forEach(ev => {
+                settingsHtml += `
+                    <div class="torn-clock-settings-item">
+                        <label><input type="checkbox" data-ev="${ev.id}" ${State[ev.id] ? 'checked' : ''}> ${ev.name}</label>
+                    </div>
+                `;
+            });
+        });
+
         clockEl.innerHTML = `
             <div id="torn-clock-header">drag | Torn Clock</div>
             <div id="torn-clock-data">Loading...</div>
             <a class="torn-clock-toggle" id="torn-clock-settings-btn">Settings</a>
             <div class="torn-clock-settings-panel" id="torn-clock-settings">
-                <label><input type="checkbox" id="tc-toggle-tct" ${State.useLocalTime ? 'checked' : ''}> Use Local Time</label>
-                <label>Offset (hrs): <input type="number" id="tc-offset" value="${State.localOffset}" style="width:40px; background:#333; color:#fff; border:1px solid #555;"></label>
-                <hr style="border: 0; border-top: 1px solid #555; margin: 5px 0;">
-                <label><input type="checkbox" data-ev="hourly" ${State.events.hourly ? 'checked' : ''}> Hourly Events</label>
-                <label><input type="checkbox" data-ev="daily" ${State.events.daily ? 'checked' : ''}> Daily Events</label>
-                <label><input type="checkbox" data-ev="weekly" ${State.events.weekly ? 'checked' : ''}> Weekly Events</label>
-                <label><input type="checkbox" data-ev="monthly" ${State.events.monthly ? 'checked' : ''}> Monthly Events</label>
-                <label><input type="checkbox" data-ev="regenEnergy" ${State.events.regenEnergy ? 'checked' : ''}> Energy Regen</label>
-                <label><input type="checkbox" data-ev="regenNerve" ${State.events.regenNerve ? 'checked' : ''}> Nerve Regen</label>
-                <label><input type="checkbox" data-ev="regenHappy" ${State.events.regenHappy ? 'checked' : ''}> Happy Regen</label>
+                ${settingsHtml}
             </div>
         `;
 
@@ -245,7 +293,7 @@
     };
 
     // ==========================================
-    // 4. DRAG & EVENT BINDINGS (DESKTOP + PDA)
+    // 4. DRAG & EVENT BINDINGS
     // ==========================================
     const initDrag = () => {
         const header = document.getElementById("torn-clock-header");
@@ -261,7 +309,6 @@
             let newLeft = initialLeft + (clientX - startX);
             let newTop = initialTop + (clientY - startY);
             
-            // Constrain to viewport
             newLeft = Math.max(0, Math.min(newLeft, window.innerWidth - clockEl.offsetWidth));
             newTop = Math.max(0, Math.min(newTop, window.innerHeight - clockEl.offsetHeight));
 
@@ -305,24 +352,38 @@
 
         settingsBtn.addEventListener("click", () => {
             settingsPanel.style.display = settingsPanel.style.display === "block" ? "none" : "block";
+            updateClock(); // Force immediate redraw to fix height
         });
 
         document.getElementById("tc-toggle-tct").addEventListener("change", (e) => {
             State.useLocalTime = e.target.checked;
             saveState();
+            updateClock();
         });
 
         document.getElementById("tc-offset").addEventListener("input", (e) => {
             State.localOffset = parseFloat(e.target.value) || 0;
             saveState();
+            updateClock();
         });
 
-        const evToggles = clockEl.querySelectorAll('input[data-ev]');
-        evToggles.forEach(chk => {
+        // Category Toggles
+        clockEl.querySelectorAll('input[data-cat]').forEach(chk => {
             chk.addEventListener("change", (e) => {
-                const evKey = e.target.getAttribute("data-ev");
-                State.events[evKey] = e.target.checked;
+                const catId = e.target.getAttribute("data-cat");
+                State[`cat_${catId}`] = e.target.checked;
                 saveState();
+                updateClock();
+            });
+        });
+
+        // Event Toggles
+        clockEl.querySelectorAll('input[data-ev]').forEach(chk => {
+            chk.addEventListener("change", (e) => {
+                const evId = e.target.getAttribute("data-ev");
+                State[evId] = e.target.checked;
+                saveState();
+                updateClock();
             });
         });
     };
@@ -333,7 +394,6 @@
     const updateClock = () => {
         if (!clockDataEl) return;
         
-        // Base clock calculation
         const now = getTCTDate();
         let displayHour = now.getUTCHours();
         
@@ -343,23 +403,50 @@
 
         const clockTimeStr = `${displayHour.toString().padStart(2, '0')}:${now.getUTCMinutes().toString().padStart(2, '0')}:${now.getUTCSeconds().toString().padStart(2, '0')} ${State.useLocalTime ? 'Local' : 'TCT'}`;
 
-        const nextEv = getNextEvent();
-        
-        let html = `<div>${clockTimeStr}</div>`;
-        if (nextEv) {
-            html += `<div style="margin-top: 8px; color: #aaa; font-size: 11px;">Next: ${nextEv.name}</div>
-                     <div class="torn-clock-time">${formatTime(nextEv.diff)}</div>`;
-        } else {
-            html += `<div style="margin-top: 8px; color: #888;">No events tracked</div>`;
+        let html = `<div class="torn-clock-main-time">${clockTimeStr}</div>`;
+        let activeCategoriesCount = 0;
+
+        Categories.forEach((cat, index) => {
+            // Check if category is enabled at a master level
+            if (!State[`cat_${cat.id}`]) return;
+
+            // Find all enabled individual events under this category
+            const activeEvents = EventDictionary.filter(ev => ev.cat === cat.id && State[ev.id]);
+            
+            if (activeEvents.length > 0) {
+                // Add separator if it's not the very first active category displayed
+                if (activeCategoriesCount > 0) {
+                    html += `<hr class="torn-clock-hr">`;
+                }
+                
+                html += `<div class="torn-clock-cat-title">${cat.name}</div>`;
+                
+                activeEvents.forEach(ev => {
+                    const nextTime = ev.getNext();
+                    const diff = nextTime - now;
+                    html += `
+                        <div class="torn-clock-event-row">
+                            <span class="torn-clock-event-name">${ev.name}</span>
+                            <span class="torn-clock-event-time">${formatTime(diff)}</span>
+                        </div>
+                    `;
+                });
+                
+                activeCategoriesCount++;
+            }
+        });
+
+        if (activeCategoriesCount === 0) {
+            html += `<div style="text-align:center; color: #888; font-size:12px; margin-top:10px;">No events tracked</div>`;
         }
 
         clockDataEl.innerHTML = html;
     };
 
-    const observer = new MutationObserver((mutations) => {
-        // Passively check if body is ready and UI needs injection
+    const observer = new MutationObserver(() => {
         if (document.body && !document.getElementById("torn-clock-widget")) {
             renderClockUI();
+            updateClock(); // Initial paint
         }
     });
 
@@ -368,15 +455,10 @@
     // ==========================================
     const init = () => {
         injectCSS();
-        
-        // Start watching the DOM to safely inject UI outside of React unmount cycles
         observer.observe(document.documentElement, { childList: true, subtree: true });
-
-        // Tick loop (Strict constraint: ONLY used for the actual second-by-second countdown, not DOM loading)
         setInterval(updateClock, 1000);
     };
 
-    // Wait for native head/body to begin forming before execution
     if (document.readyState === "loading") {
         document.addEventListener("DOMContentLoaded", init);
     } else {
