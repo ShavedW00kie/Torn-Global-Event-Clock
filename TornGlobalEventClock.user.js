@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Global Event Clock
 // @namespace    https://github.com/ShavedW00kie/
-// @version      1.2.1
+// @version      1.2.2
 // @description  Draggable global event countdown clock for Torn.com (Desktop & TornPDA) with granular toggles
 // @author       ShavedW00kie (Torn: ThaWookie [2954173] )
 // @homepageURL  https://github.com/ShavedW00kie
@@ -43,7 +43,7 @@
         }
     };
 
-    // Default configuration state
+    // Default configuration state (All visible by default for new installations)
     const State = {
         pos: Storage.get("pos", { top: 50, left: 50 }),
         useLocalTime: Storage.get("useLocalTime", false),
@@ -58,15 +58,19 @@
 
         // Individual Event Toggles
         ev_hourly_vendors: Storage.get("ev_hourly_vendors", true),
+        
         ev_daily_reset: Storage.get("ev_daily_reset", true),
-        ev_daily_virus: Storage.get("ev_daily_virus", false),
-        ev_daily_prop: Storage.get("ev_daily_prop", false),
-        ev_daily_addiction: Storage.get("ev_daily_addiction", false),
-        ev_daily_company: Storage.get("ev_daily_company", false),
-        ev_weekly_lotto: Storage.get("ev_weekly_lotto", false),
-        ev_weekly_news: Storage.get("ev_weekly_news", false),
-        ev_weekly_company: Storage.get("ev_weekly_company", false),
-        ev_monthly_sub: Storage.get("ev_monthly_sub", false),
+        ev_daily_virus: Storage.get("ev_daily_virus", true),
+        ev_daily_prop: Storage.get("ev_daily_prop", true),
+        ev_daily_addiction: Storage.get("ev_daily_addiction", true),
+        ev_daily_company: Storage.get("ev_daily_company", true),
+        
+        ev_weekly_lotto: Storage.get("ev_weekly_lotto", true),
+        ev_weekly_news: Storage.get("ev_weekly_news", true),
+        ev_weekly_company: Storage.get("ev_weekly_company", true),
+        
+        ev_monthly_sub: Storage.get("ev_monthly_sub", true),
+        
         ev_regen_energy: Storage.get("ev_regen_energy", true),
         ev_regen_nerve: Storage.get("ev_regen_nerve", true),
         ev_regen_happy: Storage.get("ev_regen_happy", true) // The 15m reset for happy jumps
@@ -352,7 +356,7 @@
 
         settingsBtn.addEventListener("click", () => {
             settingsPanel.style.display = settingsPanel.style.display === "block" ? "none" : "block";
-            updateClock(); // Force immediate redraw to fix height
+            updateClock(); // Force immediate redraw to fix height calculations
         });
 
         document.getElementById("tc-toggle-tct").addEventListener("change", (e) => {
@@ -406,7 +410,7 @@
         let html = `<div class="torn-clock-main-time">${clockTimeStr}</div>`;
         let activeCategoriesCount = 0;
 
-        Categories.forEach((cat, index) => {
+        Categories.forEach((cat) => {
             // Check if category is enabled at a master level
             if (!State[`cat_${cat.id}`]) return;
 
