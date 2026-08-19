@@ -1,15 +1,17 @@
 // ==UserScript==
 // @name         Torn Global Event Clock
 // @namespace    https://github.com/ShavedW00kie/
-// @version      1.0.0
+// @version      1.1.0
 // @description  Draggable global event countdown clock for Torn.com (Desktop & TornPDA)
-// @author       ShavedW00kie (via Copilot Space)
+// @author       ShavedW00kie
+// @homepageURL  https://github.com/ShavedW00kie
 // @match        https://*.torn.com/*
 // @match        https://torn.com/*
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_addStyle
 // @run-at       document-start
+// @connect      api.torn.com
 // ==/UserScript==
 
 (function () {
