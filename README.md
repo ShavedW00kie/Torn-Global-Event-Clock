@@ -1,4 +1,4 @@
-# Project Name
+# Torn Global Event Clock
 
 Brief description of what this application does.
 
