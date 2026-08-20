@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Global Event Clock
 // @namespace    https://github.com/ShavedW00kie/
-// @version      1.2.5
+// @version      1.2.6
 // @description  Draggable global event countdown clock for Torn.com (Desktop & TornPDA) with granular toggles
 // @author       ShavedW00kie (Torn: ThaWookie [2954173] )
 // @homepageURL  https://github.com/ShavedW00kie
@@ -260,7 +260,7 @@
                 font-size: 11px;
                 border-top: 1px solid #555;
                 padding-top: 5px;
-                max-height: 200px;
+                max-height: 250px;
                 overflow-y: auto;
             }
             .torn-clock-settings-panel label { display: block; margin-bottom: 4px; cursor: pointer; color: #ccc; }
@@ -268,6 +268,36 @@
             .torn-clock-settings-item { margin-left: 10px; }
             .torn-clock-toggle { cursor: pointer; color: #888; font-size: 11px; text-decoration: underline; text-align: center; display: block; margin-top: 8px;}
             
+            /* Support Module Styles */
+            #thawookie-support-module {
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+                margin-top: 15px;
+                padding-top: 10px;
+                border-top: 1px solid #444;
+                align-items: center; /* Centers the buttons */
+            }
+            .tw-support-btn {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 8px 12px;
+                color: #fff !important;
+                text-decoration: none !important;
+                border-radius: 6px;
+                font-size: 11px;
+                font-weight: bold;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+                transition: transform 0.2s ease;
+                border: 1px solid #555;
+                cursor: pointer;
+                width: 90%;
+            }
+            .tw-support-btn:active { transform: scale(0.95); }
+            .tw-bmc { background-color: #FFDD00; color: #000 !important; border-color: #FFDD00; }
+            .tw-torn-tip { background-color: #8ab63d; border-color: #6a8c2f; }
+
             /* Scrollbar styling for panels */
             #torn-clock-widget ::-webkit-scrollbar { width: 4px; }
             #torn-clock-widget ::-webkit-scrollbar-thumb { background: #666; border-radius: 2px; }
@@ -310,6 +340,14 @@
                 `;
             });
         });
+
+        // Inject the Support Module UI elements at the bottom of the settings
+        settingsHtml += `
+            <div id="thawookie-support-module">
+                <a href="https://www.buymeacoffee.com/bittick1c" target="_blank" rel="noopener noreferrer" class="tw-support-btn tw-bmc">☕ Buy Me a Coffee</a>
+                <a href="https://www.torn.com/item.php#XID=206&action=send&uid=2954173" class="tw-support-btn tw-torn-tip">💊 Send a Xanax Tip</a>
+            </div>
+        `;
 
         clockEl.innerHTML = `
             <div id="torn-clock-header">
