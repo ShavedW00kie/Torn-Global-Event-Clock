@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Global Event Clock
 // @namespace    https://github.com/ShavedW00kie/
-// @version      1.2.4
+// @version      1.2.5
 // @description  Draggable global event countdown clock for Torn.com (Desktop & TornPDA) with granular toggles
 // @author       ShavedW00kie (Torn: ThaWookie [2954173] )
 // @homepageURL  https://github.com/ShavedW00kie
@@ -20,31 +20,49 @@
     "use strict";
 
     // ==========================================
-    // 1. UNIVERSAL STORAGE MANAGER
+    // 1. UNIVERSAL STORAGE MANAGER (PDA Optimized)
     // ==========================================
     const Storage = {
         get: (key, defaultValue) => {
-            if (typeof GM_getValue !== "undefined") {
-                return GM_getValue(key, defaultValue);
+            let val = undefined;
+            
+            // 1st Priority: GM Storage
+            if (typeof GM_getValue === "function") {
+                val = GM_getValue(key);
             }
-            try {
-                const stored = localStorage.getItem(`TornClock_${key}`);
-                return stored ? JSON.parse(stored) : defaultValue;
-            } catch (e) {
-                return defaultValue;
+            
+            // 2nd Priority: Fallback to localStorage (Fixes TornPDA webview isolation issues)
+            if (val === undefined) {
+                try {
+                    const stored = window.localStorage.getItem(`TornClock_${key}`);
+                    if (stored !== null) {
+                        val = JSON.parse(stored);
+                    }
+                } catch (e) {
+                    // Fail silently if localStorage is blocked
+                }
             }
+            
+            return val !== undefined ? val : defaultValue;
         },
         set: (key, value) => {
-            if (typeof GM_setValue !== "undefined") {
+            // Write to GM Storage
+            if (typeof GM_setValue === "function") {
                 GM_setValue(key, value);
-            } else {
-                localStorage.setItem(`TornClock_${key}`, JSON.stringify(value));
+            }
+            
+            // Dual-write to localStorage for maximum cross-webview persistence on Mobile
+            try {
+                window.localStorage.setItem(`TornClock_${key}`, JSON.stringify(value));
+            } catch (e) {
+                // Fail silently
             }
         }
     };
 
-    // Default configuration state (All visible by default for new installations)
+    // Default configuration state
     const State = {
+        isCollapsed: Storage.get("isCollapsed", false),
         pos: Storage.get("pos", { top: 50, left: 50 }),
         useLocalTime: Storage.get("useLocalTime", false),
         localOffset: Storage.get("localOffset", 0),
@@ -73,10 +91,11 @@
         
         ev_regen_energy: Storage.get("ev_regen_energy", true),
         ev_regen_nerve: Storage.get("ev_regen_nerve", true),
-        ev_regen_happy: Storage.get("ev_regen_happy", true) // The 15m reset for happy jumps
+        ev_regen_happy: Storage.get("ev_regen_happy", true)
     };
 
     const saveState = () => {
+        Storage.set("isCollapsed", State.isCollapsed);
         Storage.set("pos", State.pos);
         Storage.set("useLocalTime", State.useLocalTime);
         Storage.set("localOffset", State.localOffset);
@@ -143,7 +162,7 @@
     ];
 
     const EventDictionary = [
-        // Hourly (XX:00, 15, 30, 45)
+        // Hourly
         { id: "ev_hourly_vendors", cat: "hourly", name: "Vendors / Territory", getNext: () => getNextInterval(15) },
         
         // Daily
@@ -153,7 +172,7 @@
         { id: "ev_daily_addiction", cat: "daily", name: "Addiction Decay", getNext: () => getNextOccurrence(3, 31) },
         { id: "ev_daily_company", cat: "daily", name: "Company Effectiveness", getNext: () => getNextOccurrence(18, 0) },
         
-        // Weekly (Sunday = 0)
+        // Weekly
         { id: "ev_weekly_lotto", cat: "weekly", name: "Lotteries", getNext: () => getNextOccurrence(10, 0, 0) },
         { id: "ev_weekly_news", cat: "weekly", name: "Newspaper Bazaar", getNext: () => getNextOccurrence(14, 0, 0) },
         { id: "ev_weekly_company", cat: "weekly", name: "Company Star", getNext: () => getNextOccurrence(18, 0, 0) },
@@ -209,14 +228,26 @@
                 margin-bottom: 5px;
                 background: #222;
                 border-radius: 4px 4px 0 0;
+                position: relative;
             }
             #torn-clock-header:active { cursor: grabbing; }
+            #torn-clock-collapse-btn {
+                position: absolute;
+                right: 5px;
+                top: -2px;
+                cursor: pointer;
+                font-size: 14px;
+                font-weight: bold;
+                color: #888;
+                padding: 0 5px;
+            }
+            #torn-clock-collapse-btn:hover { color: #fff; }
             #torn-clock-data {
                 font-size: 14px;
                 flex-grow: 1;
                 overflow-y: auto;
             }
-            .torn-clock-main-time { font-size: 16px; font-weight: bold; text-align: center; margin-bottom: 10px; color: #fff; }
+            .torn-clock-main-time { font-size: 16px; font-weight: bold; text-align: center; color: #fff; }
             .torn-clock-cat-title { font-size: 12px; font-weight: bold; color: #888; margin: 8px 0 4px 0; text-transform: uppercase; text-align: center; }
             .torn-clock-event-row { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 3px; }
             .torn-clock-event-name { color: #ccc; }
@@ -281,9 +312,12 @@
         });
 
         clockEl.innerHTML = `
-            <div id="torn-clock-header">(Dragable) | Torn Countdown Clock</div>
+            <div id="torn-clock-header">
+                <span style="pointer-events:none;">drag | Torn Clock</span>
+                <span id="torn-clock-collapse-btn" title="Toggle Collapse">${State.isCollapsed ? '+' : '-'}</span>
+            </div>
             <div id="torn-clock-data">Loading...</div>
-            <a class="torn-clock-toggle" id="torn-clock-settings-btn">Settings</a>
+            <a class="torn-clock-toggle" id="torn-clock-settings-btn" style="display: ${State.isCollapsed ? 'none' : 'block'};">Settings</a>
             <div class="torn-clock-settings-panel" id="torn-clock-settings">
                 ${settingsHtml}
             </div>
@@ -293,11 +327,11 @@
         clockDataEl = document.getElementById("torn-clock-data");
 
         initDrag();
-        initSettings();
+        initInteractions();
     };
 
     // ==========================================
-    // 4. DRAG & EVENT BINDINGS
+    // 4. DRAG & INTERACTION BINDINGS
     // ==========================================
     const initDrag = () => {
         const header = document.getElementById("torn-clock-header");
@@ -333,7 +367,9 @@
         };
 
         const onStart = (e) => {
-            if (e.target !== header) return;
+            // Do not initiate drag if clicking the collapse button
+            if (e.target.id === "torn-clock-collapse-btn") return;
+            
             isDragging = true;
             startX = e.touches ? e.touches[0].clientX : e.clientX;
             startY = e.touches ? e.touches[0].clientY : e.clientY;
@@ -350,15 +386,35 @@
         header.addEventListener("touchstart", onStart, { passive: true });
     };
 
-    const initSettings = () => {
+    const initInteractions = () => {
         const settingsBtn = document.getElementById("torn-clock-settings-btn");
         const settingsPanel = document.getElementById("torn-clock-settings");
+        const collapseBtn = document.getElementById("torn-clock-collapse-btn");
 
-        settingsBtn.addEventListener("click", () => {
-            settingsPanel.style.display = settingsPanel.style.display === "block" ? "none" : "block";
-            updateClock(); // Force immediate redraw to fix height calculations
+        // Collapse/Expand Toggle
+        collapseBtn.addEventListener("click", () => {
+            State.isCollapsed = !State.isCollapsed;
+            collapseBtn.textContent = State.isCollapsed ? '+' : '-';
+            
+            // Hide/Show settings button based on collapse state
+            settingsBtn.style.display = State.isCollapsed ? 'none' : 'block';
+            
+            // Force close settings panel if collapsing
+            if (State.isCollapsed) {
+                settingsPanel.style.display = "none";
+            }
+            
+            saveState();
+            updateClock();
         });
 
+        // Settings Panel Toggle
+        settingsBtn.addEventListener("click", () => {
+            settingsPanel.style.display = settingsPanel.style.display === "block" ? "none" : "block";
+            updateClock();
+        });
+
+        // Time Settings
         document.getElementById("tc-toggle-tct").addEventListener("change", (e) => {
             State.useLocalTime = e.target.checked;
             saveState();
@@ -381,7 +437,7 @@
             });
         });
 
-        // Event Toggles
+        // Individual Event Toggles
         clockEl.querySelectorAll('input[data-ev]').forEach(chk => {
             chk.addEventListener("change", (e) => {
                 const evId = e.target.getAttribute("data-ev");
@@ -407,41 +463,42 @@
 
         const clockTimeStr = `${displayHour.toString().padStart(2, '0')}:${now.getUTCMinutes().toString().padStart(2, '0')}:${now.getUTCSeconds().toString().padStart(2, '0')} ${State.useLocalTime ? 'Local' : 'TCT'}`;
 
-        let html = `<div class="torn-clock-main-time">${clockTimeStr}</div>`;
-        let activeCategoriesCount = 0;
+        let html = `<div class="torn-clock-main-time" style="${State.isCollapsed ? 'margin-bottom: 0;' : 'margin-bottom: 10px;'}">${clockTimeStr}</div>`;
+        
+        // Skip rendering events if the widget is collapsed
+        if (!State.isCollapsed) {
+            let activeCategoriesCount = 0;
 
-        Categories.forEach((cat) => {
-            // Check if category is enabled at a master level
-            if (!State[`cat_${cat.id}`]) return;
+            Categories.forEach((cat) => {
+                if (!State[`cat_${cat.id}`]) return;
 
-            // Find all enabled individual events under this category
-            const activeEvents = EventDictionary.filter(ev => ev.cat === cat.id && State[ev.id]);
-            
-            if (activeEvents.length > 0) {
-                // Add separator if it's not the very first active category displayed
-                if (activeCategoriesCount > 0) {
-                    html += `<hr class="torn-clock-hr">`;
+                const activeEvents = EventDictionary.filter(ev => ev.cat === cat.id && State[ev.id]);
+                
+                if (activeEvents.length > 0) {
+                    if (activeCategoriesCount > 0) {
+                        html += `<hr class="torn-clock-hr">`;
+                    }
+                    
+                    html += `<div class="torn-clock-cat-title">${cat.name}</div>`;
+                    
+                    activeEvents.forEach(ev => {
+                        const nextTime = ev.getNext();
+                        const diff = nextTime - now;
+                        html += `
+                            <div class="torn-clock-event-row">
+                                <span class="torn-clock-event-name">${ev.name}</span>
+                                <span class="torn-clock-event-time">${formatTime(diff)}</span>
+                            </div>
+                        `;
+                    });
+                    
+                    activeCategoriesCount++;
                 }
-                
-                html += `<div class="torn-clock-cat-title">${cat.name}</div>`;
-                
-                activeEvents.forEach(ev => {
-                    const nextTime = ev.getNext();
-                    const diff = nextTime - now;
-                    html += `
-                        <div class="torn-clock-event-row">
-                            <span class="torn-clock-event-name">${ev.name}</span>
-                            <span class="torn-clock-event-time">${formatTime(diff)}</span>
-                        </div>
-                    `;
-                });
-                
-                activeCategoriesCount++;
-            }
-        });
+            });
 
-        if (activeCategoriesCount === 0) {
-            html += `<div style="text-align:center; color: #888; font-size:12px; margin-top:10px;">No events tracked</div>`;
+            if (activeCategoriesCount === 0) {
+                html += `<div style="text-align:center; color: #888; font-size:12px; margin-top:10px;">No events tracked</div>`;
+            }
         }
 
         clockDataEl.innerHTML = html;
@@ -450,7 +507,7 @@
     const observer = new MutationObserver(() => {
         if (document.body && !document.getElementById("torn-clock-widget")) {
             renderClockUI();
-            updateClock(); // Initial paint
+            updateClock();
         }
     });
 
