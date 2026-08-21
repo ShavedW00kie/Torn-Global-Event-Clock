@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Global Event Clock
 // @namespace    https://github.com/ShavedW00kie/
-// @version      1.2.6
+// @version      1.2.7
 // @description  Draggable global event countdown clock for Torn.com (Desktop & TornPDA) with granular toggles
 // @author       ShavedW00kie (Torn: ThaWookie [2954173] )
 // @homepageURL  https://github.com/ShavedW00kie
@@ -345,7 +345,7 @@
         settingsHtml += `
             <div id="thawookie-support-module">
                 <a href="https://www.buymeacoffee.com/bittick1c" target="_blank" rel="noopener noreferrer" class="tw-support-btn tw-bmc">☕ Buy Me a Coffee</a>
-                <a href="https://www.torn.com/item.php#XID=206&action=send&uid=2954173" class="tw-support-btn tw-torn-tip">💊 Send a Xanax Tip</a>
+                <a href="https://www.torn.com/item.php" target="_blank" rel="noopener noreferrer" class="tw-support-btn tw-torn-tip" title='Opens Items — search "Xanax", tap Send, enter ThaWookie [2954173]'>💊 Send a Xanax Tip</a>
             </div>
         `;
 
