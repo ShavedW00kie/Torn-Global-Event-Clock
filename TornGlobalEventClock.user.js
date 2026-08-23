@@ -1,9 +1,10 @@
 // ==UserScript==
 // @name         Torn Global Event Clock
 // @namespace    https://github.com/ShavedW00kie/
-// @version      1.2.8
+// @version      1.2.9
 // @description  Draggable global event countdown clock for Torn.com (Desktop & TornPDA) with granular toggles
 // @author       ShavedW00kie (Torn: ThaWookie [2954173] )
+// @license      BSD-3-Clause
 // @homepageURL  https://github.com/ShavedW00kie
 // @downloadURL  https://github.com/ShavedW00kie/Torn-Global-Event-Clock/raw/refs/heads/main/TornGlobalEventClock.user.js
 // @updateURL    https://github.com/ShavedW00kie/Torn-Global-Event-Clock/raw/refs/heads/main/TornGlobalEventClock.user.js
@@ -12,12 +13,16 @@
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_addStyle
+// @grant        GM_info
 // @run-at       document-start
 // @connect      api.torn.com
 // ==/UserScript==
 
 (function () {
     "use strict";
+
+    // Grab version directly from Tampermonkey metadata, with manual fallback
+    const SCRIPT_VERSION = (typeof GM_info !== "undefined" && GM_info.script) ? GM_info.script.version : "1.2.9";
 
     // ==========================================
     // 1. UNIVERSAL STORAGE MANAGER (PDA Optimized)
@@ -273,10 +278,8 @@
                 display: flex;
                 flex-direction: column;
                 gap: 8px;
-                margin-top: 15px;
-                padding-top: 10px;
-                border-top: 1px solid #444;
-                align-items: center; /* Centers the buttons */
+                margin-top: 8px;
+                align-items: center;
             }
             .tw-support-btn {
                 display: flex;
@@ -341,8 +344,11 @@
             });
         });
 
-        // Inject the Support Module UI elements at the bottom of the settings
+        // Inject Version and Support Module UI at the bottom
         settingsHtml += `
+            <div style="text-align: center; color: #888; font-size: 10px; margin-top: 15px; border-top: 1px solid #444; padding-top: 10px;">
+                v${SCRIPT_VERSION}
+            </div>
             <div id="thawookie-support-module">
                 <a href="https://www.torn.com/item.php" target="_blank" rel="noopener noreferrer" class="tw-support-btn tw-torn-tip" title='Opens Items — search "Xanax", tap Send, enter ThaWookie [2954173]'>💊 Send a Xanax Tip</a>
                 <a href="https://www.buymeacoffee.com/bittick1c" target="_blank" rel="noopener noreferrer" class="tw-support-btn tw-bmc">☕ Buy Me a Coffee</a>
@@ -405,7 +411,6 @@
         };
 
         const onStart = (e) => {
-            // Do not initiate drag if clicking the collapse button
             if (e.target.id === "torn-clock-collapse-btn") return;
             
             isDragging = true;
@@ -429,15 +434,11 @@
         const settingsPanel = document.getElementById("torn-clock-settings");
         const collapseBtn = document.getElementById("torn-clock-collapse-btn");
 
-        // Collapse/Expand Toggle
         collapseBtn.addEventListener("click", () => {
             State.isCollapsed = !State.isCollapsed;
             collapseBtn.textContent = State.isCollapsed ? '+' : '-';
-            
-            // Hide/Show settings button based on collapse state
             settingsBtn.style.display = State.isCollapsed ? 'none' : 'block';
             
-            // Force close settings panel if collapsing
             if (State.isCollapsed) {
                 settingsPanel.style.display = "none";
             }
@@ -446,13 +447,11 @@
             updateClock();
         });
 
-        // Settings Panel Toggle
         settingsBtn.addEventListener("click", () => {
             settingsPanel.style.display = settingsPanel.style.display === "block" ? "none" : "block";
             updateClock();
         });
 
-        // Time Settings
         document.getElementById("tc-toggle-tct").addEventListener("change", (e) => {
             State.useLocalTime = e.target.checked;
             saveState();
@@ -465,7 +464,6 @@
             updateClock();
         });
 
-        // Category Toggles
         clockEl.querySelectorAll('input[data-cat]').forEach(chk => {
             chk.addEventListener("change", (e) => {
                 const catId = e.target.getAttribute("data-cat");
@@ -475,7 +473,6 @@
             });
         });
 
-        // Individual Event Toggles
         clockEl.querySelectorAll('input[data-ev]').forEach(chk => {
             chk.addEventListener("change", (e) => {
                 const evId = e.target.getAttribute("data-ev");
@@ -503,7 +500,6 @@
 
         let html = `<div class="torn-clock-main-time" style="${State.isCollapsed ? 'margin-bottom: 0;' : 'margin-bottom: 10px;'}">${clockTimeStr}</div>`;
         
-        // Skip rendering events if the widget is collapsed
         if (!State.isCollapsed) {
             let activeCategoriesCount = 0;
 
@@ -554,6 +550,13 @@
     // ==========================================
     const init = () => {
         injectCSS();
+        
+        // Immediate DOM check to fix rendering issues on fast-loading PC browsers
+        if (document.body && !document.getElementById("torn-clock-widget")) {
+            renderClockUI();
+            updateClock();
+        }
+        
         observer.observe(document.documentElement, { childList: true, subtree: true });
         setInterval(updateClock, 1000);
     };
