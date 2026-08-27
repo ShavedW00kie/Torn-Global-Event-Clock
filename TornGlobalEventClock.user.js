@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Global Event Clock
 // @namespace    https://github.com/ShavedW00kie/
-// @version      1.3.1
+// @version      1.3.2
 // @description  Draggable global event countdown clock for Torn.com (Desktop & TornPDA) with granular toggles
 // @author       ShavedW00kie (Torn: ThaWookie [2954173] )
 // @license      BSD-3-Clause
@@ -23,6 +23,7 @@
 
     /**
      * File: userscript-debugger-module.js
+     * Version 1.0.1
      * Advanced Modular Userscript Debugger Engine
      * Author: Github.com/ShavedW00kie/
      * Optimized for Desktop PC, Mobile Browsers, and TornPDA Native WebViews
@@ -177,7 +178,7 @@
             const buttonGroup = document.createElement('div');
             buttonGroup.style.cssText = `display:flex;gap:6px;`;
 
-            // Direct Clipboard Mirror Button
+            // Direct Clipboard Mirror Button (Rendered exclusively inside the debug UI)
             const copyBtn = document.createElement('button');
             copyBtn.innerText = 'Copy';
             copyBtn.style.cssText = `background:#2a2a2a;color:#fff;border:1px solid #444;cursor:pointer;padding:3px 8px;font-size:10px;border-radius:3px;transition:all 0.2s;`;
@@ -213,16 +214,16 @@
         }
 
         // Export internal operational routines to top layer callers
+        // Notice: copyLogs is intentionally NOT exported to prevent external clutter
         return {
             log: log,
-            toggleView: toggleConsoleView,
-            copy: function(elementRef = null) { copyLogs(elementRef); }
+            toggleView: toggleConsoleView
         };
     }
 
     // Initialize Debugger Module
     const SCRIPT_NAME = (typeof GM_info !== "undefined" && GM_info.script) ? GM_info.script.name : 'Torn Global Event Clock';
-    const SCRIPT_VERSION = (typeof GM_info !== "undefined" && GM_info.script) ? GM_info.script.version : "1.3.0";
+    const SCRIPT_VERSION = (typeof GM_info !== "undefined" && GM_info.script) ? GM_info.script.version : "1.3.2";
     const MyDebug = initializeModularDebugger(SCRIPT_NAME);
     MyDebug.log(`[Lifecycle] ${SCRIPT_NAME} v${SCRIPT_VERSION} initializing...`);
 
@@ -482,6 +483,7 @@
                 gap: 8px;
                 margin-top: 8px;
                 align-items: center;
+                position: relative;
             }
             .tw-support-btn {
                 display: flex;
@@ -502,7 +504,19 @@
             .tw-support-btn:active { transform: scale(0.95); }
             .tw-bmc { background-color: #FFDD00; color: #000 !important; border-color: #FFDD00; }
             .tw-torn-tip { background-color: #8ab63d; border-color: #6a8c2f; }
-            .tw-debug { background-color: #444; border-color: #333; color: #00ff66 !important; }
+            
+            /* Subtle Debug Button Styling */
+            .tw-debug { 
+                background-color: transparent !important; 
+                border: none !important; 
+                box-shadow: none !important; 
+                padding: 2px !important; 
+                width: auto !important; 
+                font-size: 14px !important; 
+                opacity: 0.4; 
+                transition: opacity 0.2s ease;
+            }
+            .tw-debug:hover { opacity: 1; }
 
             /* Scrollbar styling for panels */
             #torn-clock-widget ::-webkit-scrollbar { width: 4px; }
@@ -549,14 +563,13 @@
             });
         });
 
-        // Inject Version, Support Module, and Debug UI at the bottom
+        // Inject Version, Support Module, and subtle Debug UI at the bottom
         settingsHtml += `
-            <div style="text-align: center; color: #888; font-size: 10px; margin-top: 15px; border-top: 1px solid #444; padding-top: 10px;">
-                v${SCRIPT_VERSION}
+            <div style="display: flex; justify-content: center; align-items: center; color: #888; font-size: 10px; margin-top: 15px; border-top: 1px solid #444; padding-top: 10px; gap: 8px;">
+                <span>v${SCRIPT_VERSION}</span>
+                <button id="tw-debug-toggle" class="tw-support-btn tw-debug" title="Open Debug Console">🪲</button>
             </div>
             <div id="thawookie-support-module">
-                <button id="tw-debug-toggle" class="tw-support-btn tw-debug">🪲 Open Debug Console</button>
-                <button id="tw-debug-copy" class="tw-support-btn tw-debug">📋 Copy Logs to Clipboard</button>
                 <a href="https://www.torn.com/item.php" target="_blank" rel="noopener noreferrer" class="tw-support-btn tw-torn-tip" title='Opens Items — search "Xanax", tap Send, enter ThaWookie [2954173]'>💊 Send a Xanax Tip</a>
                 <a href="https://www.buymeacoffee.com/bittick1c" target="_blank" rel="noopener noreferrer" class="tw-support-btn tw-bmc">☕ Buy Me a Coffee</a>
             </div>
@@ -642,13 +655,9 @@
         const settingsPanel = document.getElementById("torn-clock-settings");
         const collapseBtn = document.getElementById("torn-clock-collapse-btn");
         
-        // Debugger Interactions
+        // Subtle Debugger Interaction
         document.getElementById("tw-debug-toggle").addEventListener("click", () => {
             MyDebug.toggleView();
-        });
-        
-        document.getElementById("tw-debug-copy").addEventListener("click", function() {
-            MyDebug.copy(this);
         });
 
         collapseBtn.addEventListener("click", () => {
