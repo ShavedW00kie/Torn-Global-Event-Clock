@@ -15,6 +15,8 @@
 // @grant        GM_addStyle
 // @grant        GM_info
 // @run-at       document-start
+// @position     1
+
 // @connect      api.torn.com
 // ==/UserScript==
 
