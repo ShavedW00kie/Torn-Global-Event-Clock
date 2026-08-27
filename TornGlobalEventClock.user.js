@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Global Event Clock
 // @namespace    https://github.com/ShavedW00kie/
-// @version      1.3.0
+// @version      1.3.1
 // @description  Draggable global event countdown clock for Torn.com (Desktop & TornPDA) with granular toggles
 // @author       ShavedW00kie (Torn: ThaWookie [2954173] )
 // @license      BSD-3-Clause
@@ -21,8 +21,210 @@
 (function () {
     "use strict";
 
-    // Grab version directly from Tampermonkey metadata, with manual fallback
-    const SCRIPT_VERSION = (typeof GM_info !== "undefined" && GM_info.script) ? GM_info.script.version : "1.2.9";
+    /**
+     * File: userscript-debugger-module.js
+     * Advanced Modular Userscript Debugger Engine
+     * Author: Github.com/ShavedW00kie/
+     * Optimized for Desktop PC, Mobile Browsers, and TornPDA Native WebViews
+     * License: BSD-3-Clause
+     */
+    function initializeModularDebugger(scriptNamespace = 'App') {
+        // 1. Generate unique random IDs to completely isolate parallel instances on one page
+        const randomSuffix = Math.random().toString(36).substring(2, 11);
+        const prefix = `us-debug-${randomSuffix}`;
+        
+        // 2. Strict Character/Memory Management (Targeting exactly 9,100,000 characters)
+        const CLIPBOARD_MAX_CHARS = 10 * 1024 * 1024; // 10MB safe baseline across platforms
+        const BUFFER_REDUCTION_SHY = 900 * 1024;      // 900KB safety margin padding
+        const MAX_LOG_STRING_LENGTH = CLIPBOARD_MAX_CHARS - BUFFER_REDUCTION_SHY; // Exactly 9.1 million characters
+
+        // 3. Isolated State Engine Tracking Data Streams
+        const state = {
+            logs: [],
+            currentBufferLength: 0,
+            domElements: {
+                container: null,
+                logArea: null
+            }
+        };
+
+        /**
+         * Appends an operational log line to the local memory stack.
+         * Evaluates character footprint dynamically to purge aged history rows.
+         * @param {any} message - The string data or structured object payload to log
+         */
+        function log(message) {
+            const time = new Date().toLocaleTimeString();
+            let cleanMessage = '';
+            
+            try {
+                cleanMessage = typeof message === 'object' ? JSON.stringify(message) : String(message);
+            } catch (e) {
+                cleanMessage = `[Serialization Error] ${message}`;
+            }
+            
+            const entry = `[${time}] ${cleanMessage}`;
+            const entryLength = entry.length + 1; // Explicit newline character offset (\n)
+
+            // Prune older log strings line-by-line if next entry overflows memory limits
+            while (state.logs.length > 0 && (state.currentBufferLength + entryLength) > MAX_LOG_STRING_LENGTH) {
+                const removed = state.logs.shift();
+                if (removed) {
+                    state.currentBufferLength -= (removed.length + 1);
+                }
+            }
+
+            // Add to tracking stack if item cleanly complies with space caps
+            if (entryLength <= MAX_LOG_STRING_LENGTH) {
+                state.logs.push(entry);
+                state.currentBufferLength += entryLength;
+            }
+
+            // Live DOM updating if visual container pane is actively drawn
+            if (state.domElements.logArea) {
+                state.domElements.logArea.innerText = state.logs.join('\n');
+                if (state.domElements.container) {
+                    state.domElements.container.scrollTop = state.domElements.container.scrollHeight;
+                }
+            }
+        }
+
+        /**
+         * Copies global runtime logs to system clipboard.
+         * Integrates hardware fallbacks for restricted mobile environments.
+         * @param {HTMLElement|null} buttonElement - UI Button reference for instant status feedback
+         */
+        function copyLogs(buttonElement = null) {
+            const payload = state.logs.join('\n');
+            if (!payload) {
+                if (buttonElement) buttonElement.innerText = "Empty!";
+                setTimeout(() => { if (buttonElement) buttonElement.innerText = "Copy Logs"; }, 1500);
+                return;
+            }
+
+            // Standard Async Clipboard API
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(payload)
+                    .then(() => handleCopySuccess(buttonElement))
+                    .catch(() => handleCopyFallback(payload, buttonElement));
+            } else {
+                // Instant fallback if running inside restricted application containers
+                handleCopyFallback(payload, buttonElement);
+            }
+        }
+
+        function handleCopySuccess(btn) {
+            if (!btn) return;
+            const baselineText = btn.innerText;
+            btn.innerText = "Copied!";
+            setTimeout(() => { btn.innerText = baselineText; }, 1500);
+        }
+
+        function handleCopyFallback(textData, btn) {
+            // Fallback for sandboxed frames or native iOS/Android WebViews in TornPDA
+            try {
+                const textarea = document.createElement('textarea');
+                textarea.value = textData;
+                textarea.style.position = 'fixed';
+                textarea.style.opacity = '0';
+                document.body.appendChild(textarea);
+                textarea.select();
+                const success = document.execCommand('copy');
+                document.body.removeChild(textarea);
+                if (success) {
+                    handleCopySuccess(btn);
+                } else {
+                    if (btn) btn.innerText = "Failed!";
+                }
+            } catch (e) {
+                if (btn) btn.innerText = "Error!";
+                log(`Fallback copy system error: ${e.message}`);
+            }
+        }
+
+        /**
+         * Renders or toggles the visible status overlay window dynamically.
+         */
+        function toggleConsoleView() {
+            let existingContainer = document.getElementById(`${prefix}-box`);
+            
+            if (existingContainer) {
+                // Flip visualization variables if DOM structure is already generated
+                if (existingContainer.style.display === 'none') {
+                    existingContainer.style.display = 'block';
+                    state.domElements.logArea.innerText = state.logs.join('\n');
+                    existingContainer.scrollTop = existingContainer.scrollHeight;
+                } else {
+                    existingContainer.style.display = 'none';
+                }
+                return;
+            }
+
+            // Generate Core Overlay Node
+            const container = document.createElement('div');
+            container.id = `${prefix}-box`;
+            // Designed with responsive layout queries natively scaled for ultra-wide PCs down to mobile viewports
+            container.style.cssText = `position:fixed;bottom:12px;right:12px;width:calc(100% - 24px);max-width:380px;height:250px;background:#181818;color:#00ff66;font-family:monospace;font-size:11px;padding:12px;z-index:2147483647;border:1px solid #00ff66;overflow-y:auto;box-shadow:0 4px 20px rgba(0,0,0,0.7);border-radius:4px;box-sizing:border-box;`;
+
+            // Generate Control Header Action Rows
+            const header = document.createElement('div');
+            header.style.cssText = `display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;border-bottom:1px solid #333;padding-bottom:5px;user-select:none;`;
+
+            const title = document.createElement('span');
+            title.innerText = `DEBUG LOG [${scriptNamespace}]`;
+            title.style.cssText = `font-weight:bold;letter-spacing:0.5px;`;
+
+            const buttonGroup = document.createElement('div');
+            buttonGroup.style.cssText = `display:flex;gap:6px;`;
+
+            // Direct Clipboard Mirror Button
+            const copyBtn = document.createElement('button');
+            copyBtn.innerText = 'Copy';
+            copyBtn.style.cssText = `background:#2a2a2a;color:#fff;border:1px solid #444;cursor:pointer;padding:3px 8px;font-size:10px;border-radius:3px;transition:all 0.2s;`;
+            copyBtn.onclick = () => copyLogs(copyBtn);
+
+            // UI Layer Minimizer Button
+            const closeBtn = document.createElement('button');
+            closeBtn.innerText = 'Hide';
+            closeBtn.style.cssText = `background:#a82020;color:#fff;border:none;cursor:pointer;padding:3px 8px;font-size:10px;border-radius:3px;`;
+            closeBtn.onclick = () => { container.style.display = 'none'; };
+
+            // Output Display Box Terminal
+            const logArea = document.createElement('div');
+            logArea.id = `${prefix}-logs`;
+            logArea.style.cssText = `white-space:pre-wrap;word-break:break-all;font-family:monospace;line-height:1.4;`;
+
+            // Structural Nodes Tree Compiler
+            buttonGroup.appendChild(copyBtn);
+            buttonGroup.appendChild(closeBtn);
+            header.appendChild(title);
+            header.appendChild(buttonGroup);
+            container.appendChild(header);
+            container.appendChild(logArea);
+            document.body.appendChild(container);
+
+            // Capture Global State Context 
+            state.domElements.container = container;
+            state.domElements.logArea = logArea;
+
+            // Render buffer rows instantly to display
+            logArea.innerText = state.logs.join('\n');
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // Export internal operational routines to top layer callers
+        return {
+            log: log,
+            toggleView: toggleConsoleView,
+            copy: function(elementRef = null) { copyLogs(elementRef); }
+        };
+    }
+
+    // Initialize Debugger Module
+    const SCRIPT_NAME = (typeof GM_info !== "undefined" && GM_info.script) ? GM_info.script.name : 'Torn Global Event Clock';
+    const SCRIPT_VERSION = (typeof GM_info !== "undefined" && GM_info.script) ? GM_info.script.version : "1.3.0";
+    const MyDebug = initializeModularDebugger(SCRIPT_NAME);
+    MyDebug.log(`[Lifecycle] ${SCRIPT_NAME} v${SCRIPT_VERSION} initializing...`);
 
     // ==========================================
     // 1. UNIVERSAL STORAGE MANAGER (PDA Optimized)
@@ -44,7 +246,7 @@
                         val = JSON.parse(stored);
                     }
                 } catch (e) {
-                    // Fail silently if localStorage is blocked
+                    MyDebug.log(`[Storage] localStorage read failed for key ${key}: ${e.message}`);
                 }
             }
             
@@ -60,7 +262,7 @@
             try {
                 window.localStorage.setItem(`TornClock_${key}`, JSON.stringify(value));
             } catch (e) {
-                // Fail silently
+                MyDebug.log(`[Storage] localStorage write failed for key ${key}: ${e.message}`);
             }
         }
     };
@@ -273,7 +475,7 @@
             .torn-clock-settings-item { margin-left: 10px; }
             .torn-clock-toggle { cursor: pointer; color: #888; font-size: 11px; text-decoration: underline; text-align: center; display: block; margin-top: 8px;}
             
-            /* Support Module Styles */
+            /* Support & Debug Module Styles */
             #thawookie-support-module {
                 display: flex;
                 flex-direction: column;
@@ -300,6 +502,7 @@
             .tw-support-btn:active { transform: scale(0.95); }
             .tw-bmc { background-color: #FFDD00; color: #000 !important; border-color: #FFDD00; }
             .tw-torn-tip { background-color: #8ab63d; border-color: #6a8c2f; }
+            .tw-debug { background-color: #444; border-color: #333; color: #00ff66 !important; }
 
             /* Scrollbar styling for panels */
             #torn-clock-widget ::-webkit-scrollbar { width: 4px; }
@@ -316,6 +519,8 @@
 
     const renderClockUI = () => {
         if (document.getElementById("torn-clock-widget")) return;
+
+        MyDebug.log('[UI] Rendering core clock widget DOM elements');
 
         clockEl = document.createElement("div");
         clockEl.id = "torn-clock-widget";
@@ -344,12 +549,14 @@
             });
         });
 
-        // Inject Version and Support Module UI at the bottom
+        // Inject Version, Support Module, and Debug UI at the bottom
         settingsHtml += `
             <div style="text-align: center; color: #888; font-size: 10px; margin-top: 15px; border-top: 1px solid #444; padding-top: 10px;">
                 v${SCRIPT_VERSION}
             </div>
             <div id="thawookie-support-module">
+                <button id="tw-debug-toggle" class="tw-support-btn tw-debug">🪲 Open Debug Console</button>
+                <button id="tw-debug-copy" class="tw-support-btn tw-debug">📋 Copy Logs to Clipboard</button>
                 <a href="https://www.torn.com/item.php" target="_blank" rel="noopener noreferrer" class="tw-support-btn tw-torn-tip" title='Opens Items — search "Xanax", tap Send, enter ThaWookie [2954173]'>💊 Send a Xanax Tip</a>
                 <a href="https://www.buymeacoffee.com/bittick1c" target="_blank" rel="noopener noreferrer" class="tw-support-btn tw-bmc">☕ Buy Me a Coffee</a>
             </div>
@@ -403,6 +610,7 @@
                 isDragging = false;
                 State.pos = { top: parseInt(clockEl.style.top), left: parseInt(clockEl.style.left) };
                 saveState();
+                MyDebug.log(`[UI] Widget position updated to Left:${State.pos.left}, Top:${State.pos.top}`);
                 document.removeEventListener("mousemove", onMove);
                 document.removeEventListener("mouseup", onEnd);
                 document.removeEventListener("touchmove", onMove);
@@ -433,6 +641,15 @@
         const settingsBtn = document.getElementById("torn-clock-settings-btn");
         const settingsPanel = document.getElementById("torn-clock-settings");
         const collapseBtn = document.getElementById("torn-clock-collapse-btn");
+        
+        // Debugger Interactions
+        document.getElementById("tw-debug-toggle").addEventListener("click", () => {
+            MyDebug.toggleView();
+        });
+        
+        document.getElementById("tw-debug-copy").addEventListener("click", function() {
+            MyDebug.copy(this);
+        });
 
         collapseBtn.addEventListener("click", () => {
             State.isCollapsed = !State.isCollapsed;
@@ -443,6 +660,7 @@
                 settingsPanel.style.display = "none";
             }
             
+            MyDebug.log(`[UI] Widget collapse state toggled to: ${State.isCollapsed}`);
             saveState();
             updateClock();
         });
@@ -540,6 +758,7 @@
 
     const observer = new MutationObserver(() => {
         if (document.body && !document.getElementById("torn-clock-widget")) {
+            MyDebug.log('[DOM] Widget missing during React state mutation. Re-injecting...');
             renderClockUI();
             updateClock();
         }
@@ -559,6 +778,7 @@
         
         observer.observe(document.documentElement, { childList: true, subtree: true });
         setInterval(updateClock, 1000);
+        MyDebug.log('[Lifecycle] Initialization complete. Observer bound.');
     };
 
     if (document.readyState === "loading") {
