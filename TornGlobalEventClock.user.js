@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Global Event Clock
 // @namespace    https://github.com/ShavedW00kie/
-// @version      1.3.4
+// @version      1.3.5
 // @description  Draggable global event countdown clock for Torn.com (Desktop & TornPDA) with granular toggles & API Cooldowns
 // @author       ShavedW00kie (Torn: ThaWookie [2954173] )
 // @license      BSD-3-Clause
@@ -223,7 +223,7 @@
 
     // Initialize Debugger Module
     const SCRIPT_NAME = (typeof GM_info !== "undefined" && GM_info.script) ? GM_info.script.name : 'Torn Global Event Clock';
-    const SCRIPT_VERSION = (typeof GM_info !== "undefined" && GM_info.script) ? GM_info.script.version : "1.3.4";
+    const SCRIPT_VERSION = (typeof GM_info !== "undefined" && GM_info.script) ? GM_info.script.version : "1.3.5";
     const MyDebug = initializeModularDebugger(SCRIPT_NAME);
     MyDebug.log(`[Lifecycle] ${SCRIPT_NAME} v${SCRIPT_VERSION} initializing...`);
 
@@ -365,7 +365,6 @@
         return target;
     };
 
-    // Fetch cooldowns from API and cache expiration timestamps locally
     const updateCooldownsFromAPI = async () => {
         if (!State.apiKey || State.apiKey.length !== 16) return;
         try {
@@ -403,30 +402,19 @@
     ];
 
     const EventDictionary = [
-        // Cooldowns (Dynamic timestamps evaluated against Date.now)
         { id: "ev_cd_drug", cat: "cooldowns", name: "Drug Cooldown", getNext: () => new Date(State.apiCooldownsExpiry.drug) },
         { id: "ev_cd_medical", cat: "cooldowns", name: "Medical Cooldown", getNext: () => new Date(State.apiCooldownsExpiry.medical) },
         { id: "ev_cd_booster", cat: "cooldowns", name: "Booster Cooldown", getNext: () => new Date(State.apiCooldownsExpiry.booster) },
-
-        // Hourly
         { id: "ev_hourly_vendors", cat: "hourly", name: "Vendors/Territory/Happy RESET", getNext: () => getNextInterval(15) },
-        
-        // Daily
         { id: "ev_daily_reset", cat: "daily", name: "Daily Reset", getNext: () => getNextOccurrence(0, 0) },
         { id: "ev_daily_virus", cat: "daily", name: "Virus Coding", getNext: () => getNextOccurrence(3, 25) },
         { id: "ev_daily_prop", cat: "daily", name: "Property/Stats", getNext: () => getNextOccurrence(3, 30) },
         { id: "ev_daily_addiction", cat: "daily", name: "Addiction Decay", getNext: () => getNextOccurrence(3, 31) },
         { id: "ev_daily_company", cat: "daily", name: "Company Effectiveness", getNext: () => getNextOccurrence(18, 0) },
-        
-        // Weekly
         { id: "ev_weekly_lotto", cat: "weekly", name: "Lotteries", getNext: () => getNextOccurrence(10, 0, 0) },
         { id: "ev_weekly_news", cat: "weekly", name: "Newspaper Bazaar", getNext: () => getNextOccurrence(14, 0, 0) },
         { id: "ev_weekly_company", cat: "weekly", name: "Company Star", getNext: () => getNextOccurrence(18, 0, 0) },
-        
-        // Monthly
         { id: "ev_monthly_sub", cat: "monthly", name: "Subscriber Bonuses", getNext: () => getNextOccurrence(5, 15, null, 1) },
-
-        // Regeneration
         { id: "ev_regen_energy", cat: "regen", name: "Energy (+5)", getNext: () => getNextInterval(10) },
         { id: "ev_regen_nerve", cat: "regen", name: "Nerve (+1)", getNext: () => getNextInterval(5) }
     ];
@@ -445,6 +433,7 @@
     // ==========================================
     let clockEl = null;
     let clockDataEl = null;
+    let hasMoved = false;
 
     const injectCSS = () => {
         const css = `
@@ -462,7 +451,8 @@
                 max-height: 80vh;
                 display: flex;
                 flex-direction: column;
-                transition: width 0.2s ease;
+                width: 220px;
+                box-sizing: border-box;
             }
             #torn-clock-header {
                 cursor: grab;
@@ -516,6 +506,42 @@
             .torn-clock-settings-item { margin-left: 10px; }
             .torn-clock-toggle { cursor: pointer; color: #888; font-size: 11px; text-decoration: underline; text-align: center; display: block; margin-top: 8px;}
             
+            /* CSS overrides for Super Collapsed Square Mode */
+            #torn-clock-widget.super-collapsed {
+                width: 44px !important;
+                height: 44px !important;
+                padding: 0 !important;
+                justify-content: center !important;
+                align-items: center !important;
+                border-radius: 8px !important;
+            }
+            #torn-clock-widget.super-collapsed #torn-clock-header {
+                border-bottom: none !important;
+                background: transparent !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                height: 100% !important;
+                width: 100% !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+            }
+            #torn-clock-widget.super-collapsed #torn-clock-title-text,
+            #torn-clock-widget.super-collapsed #torn-clock-collapse-btn,
+            #torn-clock-widget.super-collapsed #torn-clock-data,
+            #torn-clock-widget.super-collapsed #torn-clock-settings-btn,
+            #torn-clock-widget.super-collapsed #torn-clock-settings {
+                display: none !important;
+            }
+            #torn-clock-widget.super-collapsed #torn-clock-super-collapse-btn {
+                position: static !important;
+                font-size: 20px !important;
+                line-height: 1 !important;
+                padding: 0 !important;
+                top: auto !important;
+                left: auto !important;
+            }
+            
             /* Support & Debug Module Styles */
             #thawookie-support-module {
                 display: flex;
@@ -545,7 +571,6 @@
             .tw-bmc { background-color: #FFDD00; color: #000 !important; border-color: #FFDD00; }
             .tw-torn-tip { background-color: #8ab63d; border-color: #6a8c2f; }
             
-            /* Subtle Debug Button Styling */
             .tw-debug { 
                 background-color: transparent !important; 
                 border: none !important; 
@@ -558,7 +583,6 @@
             }
             .tw-debug:hover { opacity: 1; }
 
-            /* Scrollbar styling for panels */
             #torn-clock-widget ::-webkit-scrollbar { width: 4px; }
             #torn-clock-widget ::-webkit-scrollbar-thumb { background: #666; border-radius: 2px; }
         `;
@@ -571,6 +595,34 @@
         }
     };
 
+    const applyViewState = () => {
+        const superCollapseBtn = document.getElementById("torn-clock-super-collapse-btn");
+        const collapseBtn = document.getElementById("torn-clock-collapse-btn");
+        const settingsBtn = document.getElementById("torn-clock-settings-btn");
+        const settingsPanel = document.getElementById("torn-clock-settings");
+
+        if (State.isSuperCollapsed) {
+            clockEl.classList.add("super-collapsed");
+            superCollapseBtn.innerHTML = "⏱️";
+            superCollapseBtn.title = "Click to Expand";
+            settingsBtn.style.display = "none";
+            settingsPanel.style.display = "none";
+        } else {
+            clockEl.classList.remove("super-collapsed");
+            superCollapseBtn.innerHTML = "-";
+            superCollapseBtn.title = "Minimize Completely";
+            collapseBtn.innerHTML = State.isCollapsed ? "+" : "-";
+            
+            if (State.isCollapsed) {
+                settingsBtn.style.display = "none";
+                settingsPanel.style.display = "none";
+            } else {
+                settingsBtn.style.display = "block";
+            }
+        }
+        updateClock();
+    };
+
     const renderClockUI = () => {
         if (document.getElementById("torn-clock-widget")) return;
 
@@ -580,9 +632,7 @@
         clockEl.id = "torn-clock-widget";
         clockEl.style.top = `${State.pos.top}px`;
         clockEl.style.left = `${State.pos.left}px`;
-        clockEl.style.width = State.isSuperCollapsed ? "160px" : "220px";
 
-        // Generate dynamic settings HTML
         let settingsHtml = `
             <div style="margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #444;">
                 <label style="font-weight:bold; color:#fff; cursor:default;">API Key (Public/Minimal)</label>
@@ -612,7 +662,6 @@
             });
         });
 
-        // Inject Version, Support Module, and subtle Debug UI at the bottom
         settingsHtml += `
             <div style="display: flex; justify-content: center; align-items: center; color: #888; font-size: 10px; margin-top: 15px; border-top: 1px solid #444; padding-top: 10px; gap: 8px;">
                 <span>v${SCRIPT_VERSION}</span>
@@ -626,12 +675,12 @@
 
         clockEl.innerHTML = `
             <div id="torn-clock-header">
-                <span id="torn-clock-super-collapse-btn" class="torn-clock-btn" title="Minimize Completely">${State.isSuperCollapsed ? '+' : '-'}</span>
-                <span style="pointer-events:none;">Torn Clock <span style="font-size: 9px; color: #666;">(Draggable)</span></span>
-                <span id="torn-clock-collapse-btn" class="torn-clock-btn" title="Toggle Category Collapse">${State.isCollapsed ? '+' : '-'}</span>
+                <span id="torn-clock-super-collapse-btn" class="torn-clock-btn"></span>
+                <span id="torn-clock-title-text" style="pointer-events:none;">Torn Clock <span style="font-size: 9px; color: #666;">(Draggable)</span></span>
+                <span id="torn-clock-collapse-btn" class="torn-clock-btn"></span>
             </div>
             <div id="torn-clock-data">Loading...</div>
-            <a class="torn-clock-toggle" id="torn-clock-settings-btn" style="display: ${(State.isCollapsed || State.isSuperCollapsed) ? 'none' : 'block'};">Settings</a>
+            <a class="torn-clock-toggle" id="torn-clock-settings-btn">Settings</a>
             <div class="torn-clock-settings-panel" id="torn-clock-settings">
                 ${settingsHtml}
             </div>
@@ -642,6 +691,7 @@
 
         initDrag();
         initInteractions();
+        applyViewState(); // Initial view structure configuration
     };
 
     // ==========================================
@@ -654,18 +704,26 @@
 
         const onMove = (e) => {
             if (!isDragging) return;
-            e.preventDefault(); 
+            
             const clientX = e.touches ? e.touches[0].clientX : e.clientX;
             const clientY = e.touches ? e.touches[0].clientY : e.clientY;
             
-            let newLeft = initialLeft + (clientX - startX);
-            let newTop = initialTop + (clientY - startY);
-            
-            newLeft = Math.max(0, Math.min(newLeft, window.innerWidth - clockEl.offsetWidth));
-            newTop = Math.max(0, Math.min(newTop, window.innerHeight - clockEl.offsetHeight));
+            // Allow 3px forgiveness before classifying interaction strictly as a drag
+            if (Math.abs(clientX - startX) > 3 || Math.abs(clientY - startY) > 3) {
+                hasMoved = true;
+            }
 
-            clockEl.style.left = `${newLeft}px`;
-            clockEl.style.top = `${newTop}px`;
+            if (hasMoved) {
+                e.preventDefault(); 
+                let newLeft = initialLeft + (clientX - startX);
+                let newTop = initialTop + (clientY - startY);
+                
+                newLeft = Math.max(0, Math.min(newLeft, window.innerWidth - clockEl.offsetWidth));
+                newTop = Math.max(0, Math.min(newTop, window.innerHeight - clockEl.offsetHeight));
+
+                clockEl.style.left = `${newLeft}px`;
+                clockEl.style.top = `${newTop}px`;
+            }
         };
 
         const onEnd = () => {
@@ -673,7 +731,9 @@
                 isDragging = false;
                 State.pos = { top: parseInt(clockEl.style.top), left: parseInt(clockEl.style.left) };
                 saveState();
-                MyDebug.log(`[UI] Widget position updated to Left:${State.pos.left}, Top:${State.pos.top}`);
+                if (hasMoved) {
+                    MyDebug.log(`[UI] Widget position updated to Left:${State.pos.left}, Top:${State.pos.top}`);
+                }
                 document.removeEventListener("mousemove", onMove);
                 document.removeEventListener("mouseup", onEnd);
                 document.removeEventListener("touchmove", onMove);
@@ -682,9 +742,11 @@
         };
 
         const onStart = (e) => {
-            if (e.target.classList.contains("torn-clock-btn")) return;
+            // Block drag initiation when interacting with UI buttons explicitly UNLESS super-collapsed square
+            if (!State.isSuperCollapsed && e.target.classList.contains("torn-clock-btn")) return;
             
             isDragging = true;
+            hasMoved = false; // Reset drag detection flag
             startX = e.touches ? e.touches[0].clientX : e.clientX;
             startY = e.touches ? e.touches[0].clientY : e.clientY;
             initialLeft = parseInt(clockEl.style.left) || 0;
@@ -706,12 +768,10 @@
         const collapseBtn = document.getElementById("torn-clock-collapse-btn");
         const superCollapseBtn = document.getElementById("torn-clock-super-collapse-btn");
         
-        // Debugger Interaction
         document.getElementById("tw-debug-toggle").addEventListener("click", () => {
             MyDebug.toggleView();
         });
 
-        // API Sync Interaction
         document.getElementById("tc-apikey-save").addEventListener("click", async () => {
             const val = document.getElementById("tc-apikey-input").value.trim();
             if (val.length === 16) {
@@ -727,41 +787,23 @@
             }
         });
 
-        // Super Collapse (Minimize Completely)
-        superCollapseBtn.addEventListener("click", () => {
-            State.isSuperCollapsed = !State.isSuperCollapsed;
-            superCollapseBtn.textContent = State.isSuperCollapsed ? '+' : '-';
-            
-            if (State.isSuperCollapsed) {
-                settingsPanel.style.display = "none";
-                settingsBtn.style.display = "none";
-                clockEl.style.width = "160px";
-            } else {
-                settingsBtn.style.display = State.isCollapsed ? 'none' : 'block';
-                clockEl.style.width = "220px";
+        superCollapseBtn.addEventListener("click", (e) => {
+            // Prevent click collision if the user explicitly dragged the widget by grabbing the center icon
+            if (hasMoved) {
+                e.preventDefault();
+                return;
             }
-            
-            MyDebug.log(`[UI] Super collapse toggled to: ${State.isSuperCollapsed}`);
+            State.isSuperCollapsed = !State.isSuperCollapsed;
             saveState();
-            updateClock();
+            applyViewState();
+            MyDebug.log(`[UI] Super collapse toggled to: ${State.isSuperCollapsed}`);
         });
 
-        // Standard Category Collapse
         collapseBtn.addEventListener("click", () => {
             State.isCollapsed = !State.isCollapsed;
-            collapseBtn.textContent = State.isCollapsed ? '+' : '-';
-            
-            if (!State.isSuperCollapsed) {
-                settingsBtn.style.display = State.isCollapsed ? 'none' : 'block';
-            }
-            
-            if (State.isCollapsed) {
-                settingsPanel.style.display = "none";
-            }
-            
-            MyDebug.log(`[UI] Category collapse toggled to: ${State.isCollapsed}`);
             saveState();
-            updateClock();
+            applyViewState();
+            MyDebug.log(`[UI] Category collapse toggled to: ${State.isCollapsed}`);
         });
 
         settingsBtn.addEventListener("click", () => {
@@ -841,7 +883,6 @@
                         const nextTime = ev.getNext();
                         const diff = nextTime - now;
                         
-                        // Cooldowns only render if they are actively counting down or explicitly ready
                         if (ev.cat === "cooldowns" && diff <= 0 && !State[ev.id]) return; 
                         
                         html += `
@@ -883,7 +924,6 @@
             updateClock();
         }
         
-        // Initial API sync on load, and scheduled every 3 minutes to respect limits
         if (State.apiKey && State.apiKey.length === 16) {
             updateCooldownsFromAPI();
             setInterval(updateCooldownsFromAPI, 3 * 60 * 1000); 
