@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Torn Global Event Clock
 // @namespace    https://github.com/ShavedW00kie/
-// @version      1.3.3
-// @description  Draggable global event countdown clock for Torn.com (Desktop & TornPDA) with granular toggles
+// @version      1.3.4
+// @description  Draggable global event countdown clock for Torn.com (Desktop & TornPDA) with granular toggles & API Cooldowns
 // @author       ShavedW00kie (Torn: ThaWookie [2954173] )
 // @license      BSD-3-Clause
 // @homepageURL  https://github.com/ShavedW00kie
@@ -15,8 +15,6 @@
 // @grant        GM_addStyle
 // @grant        GM_info
 // @run-at       document-start
-// @position     1
-
 // @connect      api.torn.com
 // ==/UserScript==
 
@@ -225,7 +223,7 @@
 
     // Initialize Debugger Module
     const SCRIPT_NAME = (typeof GM_info !== "undefined" && GM_info.script) ? GM_info.script.name : 'Torn Global Event Clock';
-    const SCRIPT_VERSION = (typeof GM_info !== "undefined" && GM_info.script) ? GM_info.script.version : "1.3.2";
+    const SCRIPT_VERSION = (typeof GM_info !== "undefined" && GM_info.script) ? GM_info.script.version : "1.3.4";
     const MyDebug = initializeModularDebugger(SCRIPT_NAME);
     MyDebug.log(`[Lifecycle] ${SCRIPT_NAME} v${SCRIPT_VERSION} initializing...`);
 
@@ -235,33 +233,20 @@
     const Storage = {
         get: (key, defaultValue) => {
             let val = undefined;
+            if (typeof GM_getValue === "function") val = GM_getValue(key);
             
-            // 1st Priority: GM Storage
-            if (typeof GM_getValue === "function") {
-                val = GM_getValue(key);
-            }
-            
-            // 2nd Priority: Fallback to localStorage (Fixes TornPDA webview isolation issues)
             if (val === undefined) {
                 try {
                     const stored = window.localStorage.getItem(`TornClock_${key}`);
-                    if (stored !== null) {
-                        val = JSON.parse(stored);
-                    }
+                    if (stored !== null) val = JSON.parse(stored);
                 } catch (e) {
                     MyDebug.log(`[Storage] localStorage read failed for key ${key}: ${e.message}`);
                 }
             }
-            
             return val !== undefined ? val : defaultValue;
         },
         set: (key, value) => {
-            // Write to GM Storage
-            if (typeof GM_setValue === "function") {
-                GM_setValue(key, value);
-            }
-            
-            // Dual-write to localStorage for maximum cross-webview persistence on Mobile
+            if (typeof GM_setValue === "function") GM_setValue(key, value);
             try {
                 window.localStorage.setItem(`TornClock_${key}`, JSON.stringify(value));
             } catch (e) {
@@ -273,11 +258,17 @@
     // Default configuration state
     const State = {
         isCollapsed: Storage.get("isCollapsed", false),
+        isSuperCollapsed: Storage.get("isSuperCollapsed", false),
         pos: Storage.get("pos", { top: 50, left: 50 }),
         useLocalTime: Storage.get("useLocalTime", false),
         localOffset: Storage.get("localOffset", 0),
         
+        // API Management
+        apiKey: Storage.get("apiKey", ""),
+        apiCooldownsExpiry: Storage.get("apiCooldownsExpiry", { drug: 0, medical: 0, booster: 0 }),
+
         // Category Toggles
+        cat_cooldowns: Storage.get("cat_cooldowns", true),
         cat_hourly: Storage.get("cat_hourly", true),
         cat_daily: Storage.get("cat_daily", true),
         cat_weekly: Storage.get("cat_weekly", true),
@@ -285,6 +276,10 @@
         cat_regen: Storage.get("cat_regen", true),
 
         // Individual Event Toggles
+        ev_cd_drug: Storage.get("ev_cd_drug", true),
+        ev_cd_medical: Storage.get("ev_cd_medical", true),
+        ev_cd_booster: Storage.get("ev_cd_booster", true),
+
         ev_hourly_vendors: Storage.get("ev_hourly_vendors", true),
         
         ev_daily_reset: Storage.get("ev_daily_reset", true),
@@ -300,21 +295,29 @@
         ev_monthly_sub: Storage.get("ev_monthly_sub", true),
         
         ev_regen_energy: Storage.get("ev_regen_energy", true),
-        ev_regen_nerve: Storage.get("ev_regen_nerve", true),
-        ev_regen_happy: Storage.get("ev_regen_happy", true)
+        ev_regen_nerve: Storage.get("ev_regen_nerve", true)
     };
 
     const saveState = () => {
         Storage.set("isCollapsed", State.isCollapsed);
+        Storage.set("isSuperCollapsed", State.isSuperCollapsed);
         Storage.set("pos", State.pos);
         Storage.set("useLocalTime", State.useLocalTime);
         Storage.set("localOffset", State.localOffset);
         
+        Storage.set("apiKey", State.apiKey);
+        Storage.set("apiCooldownsExpiry", State.apiCooldownsExpiry);
+
+        Storage.set("cat_cooldowns", State.cat_cooldowns);
         Storage.set("cat_hourly", State.cat_hourly);
         Storage.set("cat_daily", State.cat_daily);
         Storage.set("cat_weekly", State.cat_weekly);
         Storage.set("cat_monthly", State.cat_monthly);
         Storage.set("cat_regen", State.cat_regen);
+
+        Storage.set("ev_cd_drug", State.ev_cd_drug);
+        Storage.set("ev_cd_medical", State.ev_cd_medical);
+        Storage.set("ev_cd_booster", State.ev_cd_booster);
 
         Storage.set("ev_hourly_vendors", State.ev_hourly_vendors);
         Storage.set("ev_daily_reset", State.ev_daily_reset);
@@ -328,11 +331,10 @@
         Storage.set("ev_monthly_sub", State.ev_monthly_sub);
         Storage.set("ev_regen_energy", State.ev_regen_energy);
         Storage.set("ev_regen_nerve", State.ev_regen_nerve);
-        Storage.set("ev_regen_happy", State.ev_regen_happy);
     };
 
     // ==========================================
-    // 2. TIME & EVENT PARSER LOGIC
+    // 2. TIME & API EVENT PARSER LOGIC
     // ==========================================
     const getTCTDate = () => new Date();
 
@@ -363,7 +365,36 @@
         return target;
     };
 
+    // Fetch cooldowns from API and cache expiration timestamps locally
+    const updateCooldownsFromAPI = async () => {
+        if (!State.apiKey || State.apiKey.length !== 16) return;
+        try {
+            MyDebug.log("[API] Syncing cooldowns...");
+            const res = await fetch(`https://api.torn.com/user/?selections=cooldowns&key=${State.apiKey}`);
+            const data = await res.json();
+            
+            if (data.error) {
+                MyDebug.log(`[API Error] Code ${data.error.code}: ${data.error.error}`);
+                return;
+            }
+
+            const now = Date.now();
+            State.apiCooldownsExpiry = {
+                drug: data.cooldowns.drug > 0 ? now + (data.cooldowns.drug * 1000) : 0,
+                medical: data.cooldowns.medical > 0 ? now + (data.cooldowns.medical * 1000) : 0,
+                booster: data.cooldowns.booster > 0 ? now + (data.cooldowns.booster * 1000) : 0
+            };
+            
+            saveState();
+            updateClock();
+            MyDebug.log("[API] Cooldowns synchronized successfully.");
+        } catch (e) {
+            MyDebug.log(`[API Exception] ${e.message}`);
+        }
+    };
+
     const Categories = [
+        { id: "cooldowns", name: "Personal Cooldowns" },
         { id: "hourly", name: "Hourly Events" },
         { id: "daily", name: "Daily Events" },
         { id: "weekly", name: "Weekly Events" },
@@ -372,8 +403,13 @@
     ];
 
     const EventDictionary = [
+        // Cooldowns (Dynamic timestamps evaluated against Date.now)
+        { id: "ev_cd_drug", cat: "cooldowns", name: "Drug Cooldown", getNext: () => new Date(State.apiCooldownsExpiry.drug) },
+        { id: "ev_cd_medical", cat: "cooldowns", name: "Medical Cooldown", getNext: () => new Date(State.apiCooldownsExpiry.medical) },
+        { id: "ev_cd_booster", cat: "cooldowns", name: "Booster Cooldown", getNext: () => new Date(State.apiCooldownsExpiry.booster) },
+
         // Hourly
-        { id: "ev_hourly_vendors", cat: "hourly", name: "Vendors / Territory", getNext: () => getNextInterval(15) },
+        { id: "ev_hourly_vendors", cat: "hourly", name: "Vendors/Territory/Happy RESET", getNext: () => getNextInterval(15) },
         
         // Daily
         { id: "ev_daily_reset", cat: "daily", name: "Daily Reset", getNext: () => getNextOccurrence(0, 0) },
@@ -392,11 +428,11 @@
 
         // Regeneration
         { id: "ev_regen_energy", cat: "regen", name: "Energy (+5)", getNext: () => getNextInterval(10) },
-        { id: "ev_regen_nerve", cat: "regen", name: "Nerve (+1)", getNext: () => getNextInterval(5) },
-        { id: "ev_regen_happy", cat: "regen", name: "Happy Reset (15m)", getNext: () => getNextInterval(15) }
+        { id: "ev_regen_nerve", cat: "regen", name: "Nerve (+1)", getNext: () => getNextInterval(5) }
     ];
 
     const formatTime = (ms) => {
+        if (ms <= 0) return `<span style="color: #4CAF50;">Ready</span>`;
         const totalSeconds = Math.floor(ms / 1000);
         const hours = Math.floor(totalSeconds / 3600);
         const minutes = Math.floor((totalSeconds % 3600) / 60);
@@ -421,12 +457,12 @@
                 border-radius: 6px;
                 padding: 10px;
                 font-family: Arial, sans-serif;
-                width: 220px;
                 user-select: none;
                 box-shadow: 0 4px 10px rgba(0,0,0,0.5);
                 max-height: 80vh;
                 display: flex;
                 flex-direction: column;
+                transition: width 0.2s ease;
             }
             #torn-clock-header {
                 cursor: grab;
@@ -441,9 +477,8 @@
                 position: relative;
             }
             #torn-clock-header:active { cursor: grabbing; }
-            #torn-clock-collapse-btn {
+            .torn-clock-btn {
                 position: absolute;
-                right: 5px;
                 top: -2px;
                 cursor: pointer;
                 font-size: 14px;
@@ -451,7 +486,10 @@
                 color: #888;
                 padding: 0 5px;
             }
-            #torn-clock-collapse-btn:hover { color: #fff; }
+            .torn-clock-btn:hover { color: #fff; }
+            #torn-clock-super-collapse-btn { left: 5px; }
+            #torn-clock-collapse-btn { right: 5px; }
+            
             #torn-clock-data {
                 font-size: 14px;
                 flex-grow: 1;
@@ -542,9 +580,18 @@
         clockEl.id = "torn-clock-widget";
         clockEl.style.top = `${State.pos.top}px`;
         clockEl.style.left = `${State.pos.left}px`;
+        clockEl.style.width = State.isSuperCollapsed ? "160px" : "220px";
 
         // Generate dynamic settings HTML
         let settingsHtml = `
+            <div style="margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #444;">
+                <label style="font-weight:bold; color:#fff; cursor:default;">API Key (Public/Minimal)</label>
+                <div style="display:flex; gap:4px; margin-top:4px;">
+                    <input type="password" id="tc-apikey-input" value="${State.apiKey}" style="width:100%; background:#333; color:#fff; border:1px solid #555; padding:3px; font-size:11px;" placeholder="16-character key">
+                    <button id="tc-apikey-save" style="background:#4CAF50; color:#fff; border:none; border-radius:3px; cursor:pointer; font-size:10px; padding:3px 6px;">Sync</button>
+                </div>
+            </div>
+
             <label><input type="checkbox" id="tc-toggle-tct" ${State.useLocalTime ? 'checked' : ''}> Use Local Time</label>
             <label>Offset (hrs): <input type="number" id="tc-offset" value="${State.localOffset}" style="width:40px; background:#333; color:#fff; border:1px solid #555;"></label>
         `;
@@ -579,11 +626,12 @@
 
         clockEl.innerHTML = `
             <div id="torn-clock-header">
-                <span style="pointer-events:none;">drag | Torn Clock</span>
-                <span id="torn-clock-collapse-btn" title="Toggle Collapse">${State.isCollapsed ? '+' : '-'}</span>
+                <span id="torn-clock-super-collapse-btn" class="torn-clock-btn" title="Minimize Completely">${State.isSuperCollapsed ? '+' : '-'}</span>
+                <span style="pointer-events:none;">Torn Clock <span style="font-size: 9px; color: #666;">(Draggable)</span></span>
+                <span id="torn-clock-collapse-btn" class="torn-clock-btn" title="Toggle Category Collapse">${State.isCollapsed ? '+' : '-'}</span>
             </div>
             <div id="torn-clock-data">Loading...</div>
-            <a class="torn-clock-toggle" id="torn-clock-settings-btn" style="display: ${State.isCollapsed ? 'none' : 'block'};">Settings</a>
+            <a class="torn-clock-toggle" id="torn-clock-settings-btn" style="display: ${(State.isCollapsed || State.isSuperCollapsed) ? 'none' : 'block'};">Settings</a>
             <div class="torn-clock-settings-panel" id="torn-clock-settings">
                 ${settingsHtml}
             </div>
@@ -634,7 +682,7 @@
         };
 
         const onStart = (e) => {
-            if (e.target.id === "torn-clock-collapse-btn") return;
+            if (e.target.classList.contains("torn-clock-btn")) return;
             
             isDragging = true;
             startX = e.touches ? e.touches[0].clientX : e.clientX;
@@ -656,22 +704,62 @@
         const settingsBtn = document.getElementById("torn-clock-settings-btn");
         const settingsPanel = document.getElementById("torn-clock-settings");
         const collapseBtn = document.getElementById("torn-clock-collapse-btn");
+        const superCollapseBtn = document.getElementById("torn-clock-super-collapse-btn");
         
-        // Subtle Debugger Interaction
+        // Debugger Interaction
         document.getElementById("tw-debug-toggle").addEventListener("click", () => {
             MyDebug.toggleView();
         });
 
+        // API Sync Interaction
+        document.getElementById("tc-apikey-save").addEventListener("click", async () => {
+            const val = document.getElementById("tc-apikey-input").value.trim();
+            if (val.length === 16) {
+                State.apiKey = val;
+                saveState();
+                const btn = document.getElementById("tc-apikey-save");
+                btn.innerText = "...";
+                await updateCooldownsFromAPI();
+                btn.innerText = "Sync'd";
+                setTimeout(() => btn.innerText = "Sync", 2000);
+            } else {
+                alert("Please enter a valid 16-character Torn API key.");
+            }
+        });
+
+        // Super Collapse (Minimize Completely)
+        superCollapseBtn.addEventListener("click", () => {
+            State.isSuperCollapsed = !State.isSuperCollapsed;
+            superCollapseBtn.textContent = State.isSuperCollapsed ? '+' : '-';
+            
+            if (State.isSuperCollapsed) {
+                settingsPanel.style.display = "none";
+                settingsBtn.style.display = "none";
+                clockEl.style.width = "160px";
+            } else {
+                settingsBtn.style.display = State.isCollapsed ? 'none' : 'block';
+                clockEl.style.width = "220px";
+            }
+            
+            MyDebug.log(`[UI] Super collapse toggled to: ${State.isSuperCollapsed}`);
+            saveState();
+            updateClock();
+        });
+
+        // Standard Category Collapse
         collapseBtn.addEventListener("click", () => {
             State.isCollapsed = !State.isCollapsed;
             collapseBtn.textContent = State.isCollapsed ? '+' : '-';
-            settingsBtn.style.display = State.isCollapsed ? 'none' : 'block';
+            
+            if (!State.isSuperCollapsed) {
+                settingsBtn.style.display = State.isCollapsed ? 'none' : 'block';
+            }
             
             if (State.isCollapsed) {
                 settingsPanel.style.display = "none";
             }
             
-            MyDebug.log(`[UI] Widget collapse state toggled to: ${State.isCollapsed}`);
+            MyDebug.log(`[UI] Category collapse toggled to: ${State.isCollapsed}`);
             saveState();
             updateClock();
         });
@@ -718,6 +806,11 @@
     const updateClock = () => {
         if (!clockDataEl) return;
         
+        if (State.isSuperCollapsed) {
+            clockDataEl.innerHTML = "";
+            return;
+        }
+        
         const now = getTCTDate();
         let displayHour = now.getUTCHours();
         
@@ -747,6 +840,10 @@
                     activeEvents.forEach(ev => {
                         const nextTime = ev.getNext();
                         const diff = nextTime - now;
+                        
+                        // Cooldowns only render if they are actively counting down or explicitly ready
+                        if (ev.cat === "cooldowns" && diff <= 0 && !State[ev.id]) return; 
+                        
                         html += `
                             <div class="torn-clock-event-row">
                                 <span class="torn-clock-event-name">${ev.name}</span>
@@ -781,10 +878,15 @@
     const init = () => {
         injectCSS();
         
-        // Immediate DOM check to fix rendering issues on fast-loading PC browsers
         if (document.body && !document.getElementById("torn-clock-widget")) {
             renderClockUI();
             updateClock();
+        }
+        
+        // Initial API sync on load, and scheduled every 3 minutes to respect limits
+        if (State.apiKey && State.apiKey.length === 16) {
+            updateCooldownsFromAPI();
+            setInterval(updateCooldownsFromAPI, 3 * 60 * 1000); 
         }
         
         observer.observe(document.documentElement, { childList: true, subtree: true });
