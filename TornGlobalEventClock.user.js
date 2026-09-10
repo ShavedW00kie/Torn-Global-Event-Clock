@@ -1,15 +1,14 @@
 // ==UserScript==
 // @name         Torn Global Event Clock
 // @namespace    https://github.com/ShavedW00kie/
-// @version      1.3.5
+// @version      1.3.6
 // @description  Draggable global event countdown clock for Torn.com (Desktop & TornPDA) with granular toggles & API Cooldowns
 // @author       ShavedW00kie (Torn: ThaWookie [2954173] )
 // @license      BSD-3-Clause
 // @homepageURL  https://github.com/ShavedW00kie
-// @downloadURL  https://github.com/ShavedW00kie/Torn-Global-Event-Clock/raw/refs/heads/main/TornGlobalEventClock.user.js
-// @updateURL    https://github.com/ShavedW00kie/Torn-Global-Event-Clock/raw/refs/heads/main/TornGlobalEventClock.user.js
 // @match        https://*.torn.com/*
 // @match        https://torn.com/*
+// @icon         https://raw.githubusercontent.com/ShavedW00kie/PasteByn_Public/refs/heads/main/Stopwatch%2001.png
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_addStyle
