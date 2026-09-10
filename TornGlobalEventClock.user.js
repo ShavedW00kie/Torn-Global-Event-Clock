@@ -6,8 +6,6 @@
 // @author       ShavedW00kie (Torn: ThaWookie [2954173] )
 // @license      BSD-3-Clause
 // @homepageURL  https://github.com/ShavedW00kie
-// @downloadURL  https://github.com/ShavedW00kie/Torn-Global-Event-Clock/raw/refs/heads/main/TornGlobalEventClock.user.js
-// @updateURL    https://github.com/ShavedW00kie/Torn-Global-Event-Clock/raw/refs/heads/main/TornGlobalEventClock.user.js
 // @match        https://*.torn.com/*
 // @match        https://torn.com/*
 // @grant        GM_setValue
