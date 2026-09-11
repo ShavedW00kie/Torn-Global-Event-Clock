@@ -56,15 +56,15 @@
 <p>This script utilizes the <code>Donation_UI_Module.user.js</code> architecture to provide secure, direct ways to show your appreciation[cite: 3]. You can find these links natively at the bottom of the script's settings panel, or you can use them right here by clicking the buttons below:</p>
 
 <div style="display: flex; gap: 15px; margin-top: 15px; flex-wrap: wrap;">
-    <a href="https://www.torn.com/item.php#XID=206&action=send&uid=2954173" target="_blank" style="background-color: #8ab63d; color: #fff; padding: 12px 20px; text-decoration: none; border-radius: 6px; font-weight: bold; border: 1px solid #6a8c2f; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
+    <a href="https://www.torn.com/profiles.php?XID=2954173" target="_blank" style="background-color: #8ab63d; color: #fff; padding: 12px 20px; text-decoration: none; border-radius: 6px; font-weight: bold; border: 1px solid #6a8c2f; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
         💊 Send a Xanax Tip (ThaWookie [2954173])
     </a>
-    
+    <br>
     <a href="https://www.buymeacoffee.com/bittick1c" target="_blank" style="background-color: #FFDD00; color: #000; padding: 12px 20px; text-decoration: none; border-radius: 6px; font-weight: bold; border: 1px solid #cca100; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
-        ☕ Buy Me a Coffee
+        ☕ Buy Me a Coffee?
     </a>
 </div>
 
-<p style="margin-top: 20px; color: #888; font-size: 12px; text-align: center;">Enjoy the script, and stay ahead of the clock!</p>
+<p style="margin-top: 20px; color: #888; font-size: 12px; text-align: center;">Enjoy the script, and stay ahead of the clock!!!</p>
 
 </div>
